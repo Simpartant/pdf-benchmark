@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pdf-benchmark-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=PDF Benchmark API
+      - APP_VERSION=1.0.0
+      - DEBUG=True
+      - LOG_LEVEL=INFO
+      - CORS_ORIGINS=http://localhost:3000
+      - UPLOAD_DIR=/app/sample-pdfs
+      - RESULTS_DIR=/app/results
+      - LOGS_DIR=/app/logs
+      - MAX_UPLOAD_SIZE_MB=50
+    volumes:
+      - ./sample-pdfs:/app/sample-pdfs
+      - ./results:/app/results
+      - ./logs:/app/logs
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - pdf-benchmark-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: pdf-benchmark-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
+    networks:
+      - pdf-benchmark-network
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  pdf-benchmark-network:
+    driver: bridge
+
+volumes:
+  sample-pdfs:
+  results:
+  logs:
