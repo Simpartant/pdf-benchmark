@@ -42,7 +42,13 @@ class DoclingExtractor(BaseExtractor):
         """Check if Docling is installed."""
         try:
             import docling
-            logger.info(f"Docling available: version {docling.__version__}")
+            # Try to get version from package metadata
+            try:
+                from importlib.metadata import version
+                docling_version = version("docling")
+                logger.info(f"Docling available: version {docling_version}")
+            except Exception:
+                logger.info("Docling available (version unknown)")
             return True
         except ImportError:
             logger.warning("Docling not installed")
@@ -458,23 +464,23 @@ class DoclingExtractor(BaseExtractor):
                     # Save as JSON
                     json_file = tables_dir / f"table_{idx:03d}.json"
                     table_data = self._extract_table_data(table, idx)
-                        save_json_file(json_file, table_data)
-                        logger.debug(f"Saved table {idx} as JSON")
-                        
-                        # Save as Markdown if available
-                        md_file = tables_dir / f"table_{idx:03d}.md"
-                        markdown_content = self._export_table_to_markdown(table)
-                        
-                        if markdown_content:
-                            save_text_file(md_file, markdown_content)
-                            logger.debug(f"Saved table {idx} as Markdown")
-                        
-                        # Save as CSV if possible
-                        csv_file = tables_dir / f"table_{idx:03d}.csv"
-                        csv_content = self._export_table_to_csv(table)
-                        
-                        if csv_content:
-                            save_text_file(csv_file, csv_content)
+                    save_json_file(json_file, table_data)
+                    logger.debug(f"Saved table {idx} as JSON")
+                    
+                    # Save as Markdown if available
+                    md_file = tables_dir / f"table_{idx:03d}.md"
+                    markdown_content = self._export_table_to_markdown(table)
+                    
+                    if markdown_content:
+                        save_text_file(md_file, markdown_content)
+                        logger.debug(f"Saved table {idx} as Markdown")
+                    
+                    # Save as CSV if possible
+                    csv_file = tables_dir / f"table_{idx:03d}.csv"
+                    csv_content = self._export_table_to_csv(table)
+                    
+                    if csv_content:
+                        save_text_file(csv_file, csv_content)
                 except Exception as e:
                     logger.warning(f"Failed to save table {idx}: {e}")
                     

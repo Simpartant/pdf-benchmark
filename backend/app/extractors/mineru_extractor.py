@@ -41,7 +41,12 @@ class MinerUExtractor(BaseExtractor):
         """Check if MinerU is installed."""
         try:
             import magic_pdf
-            logger.info(f"MinerU available: version {magic_pdf.__version__}")
+            try:
+                from importlib.metadata import version
+                mineru_version = version("magic-pdf")
+                logger.info(f"MinerU available: version {mineru_version}")
+            except Exception:
+                logger.info("MinerU available (version unknown)")
             return True
         except ImportError:
             logger.warning("MinerU not installed")
@@ -137,7 +142,8 @@ class MinerUExtractor(BaseExtractor):
             # Try with layout analysis first
             try:
                 # Initialize pipe with auto mode (tries to detect best method)
-                pipe = UNIPipe(pdf_bytes, {"_pdf_type": ""}, image_writer)
+                # MinerU API: UNIPipe(pdf_bytes, image_writer)
+                pipe = UNIPipe(pdf_bytes, image_writer)
                 
                 # Classify document type
                 pipe.pipe_classify()

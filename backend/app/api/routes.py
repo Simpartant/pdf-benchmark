@@ -100,7 +100,7 @@ async def get_libraries(
 async def extract_pdf(
     file: UploadFile = File(..., description="PDF file to extract"),
     libraries: str = Form(..., description="Comma-separated list of library names"),
-    benchmark_service: BenchmarkServiceDep = Depends(get_benchmark_service),
+    benchmark_service: BenchmarkServiceDep = None,
 ) -> BenchmarkResponse:
     """
     Extract text from uploaded PDF using specified libraries.

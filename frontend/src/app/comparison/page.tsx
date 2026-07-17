@@ -117,34 +117,22 @@ export default function ComparisonPage() {
       tables: 2,
       ocr: false,
     },
-    {
-      libraryName: "OpenDataLoader",
-      status: "failed",
-      time: 0,
-      memory: 0,
-      cpu: 0,
-      outputSize: 0,
-      markdownLength: 0,
-      images: 0,
-      tables: 0,
-      ocr: false,
-    },
   ]);
 
   const successfulResults = comparison.filter((c) => c.status === "success");
 
   // Find winners
   const fastest = successfulResults.reduce((prev, current) =>
-    current.time < prev.time ? current : prev
+    current.time < prev.time ? current : prev,
   );
   const leastMemory = successfulResults.reduce((prev, current) =>
-    current.memory < prev.memory ? current : prev
+    current.memory < prev.memory ? current : prev,
   );
   const leastCPU = successfulResults.reduce((prev, current) =>
-    current.cpu < prev.cpu ? current : prev
+    current.cpu < prev.cpu ? current : prev,
   );
   const largestOutput = successfulResults.reduce((prev, current) =>
-    current.outputSize > prev.outputSize ? current : prev
+    current.outputSize > prev.outputSize ? current : prev,
   );
 
   const isWinner = (library: LibraryComparison, metric: string) => {
@@ -192,7 +180,8 @@ export default function ComparisonPage() {
         <div>
           <h1 className="text-3xl font-bold">Performance Comparison</h1>
           <p className="text-muted-foreground mt-1">
-            Compare extraction libraries side-by-side • Benchmark ID: {benchmarkId || "unknown"}
+            Compare extraction libraries side-by-side • Benchmark ID:{" "}
+            {benchmarkId || "unknown"}
           </p>
         </div>
 
@@ -204,7 +193,9 @@ export default function ComparisonPage() {
               <h3 className="text-sm font-medium">Fastest</h3>
             </div>
             <p className="text-2xl font-bold">{fastest.libraryName}</p>
-            <p className="text-sm text-muted-foreground">{formatTime(fastest.time)}</p>
+            <p className="text-sm text-muted-foreground">
+              {formatTime(fastest.time)}
+            </p>
           </div>
 
           <div className="bg-card rounded-lg border shadow-sm p-4">
@@ -213,7 +204,9 @@ export default function ComparisonPage() {
               <h3 className="text-sm font-medium">Least Memory</h3>
             </div>
             <p className="text-2xl font-bold">{leastMemory.libraryName}</p>
-            <p className="text-sm text-muted-foreground">{leastMemory.memory.toFixed(1)} MB</p>
+            <p className="text-sm text-muted-foreground">
+              {leastMemory.memory.toFixed(1)} MB
+            </p>
           </div>
 
           <div className="bg-card rounded-lg border shadow-sm p-4">
@@ -222,7 +215,9 @@ export default function ComparisonPage() {
               <h3 className="text-sm font-medium">Least CPU</h3>
             </div>
             <p className="text-2xl font-bold">{leastCPU.libraryName}</p>
-            <p className="text-sm text-muted-foreground">{leastCPU.cpu.toFixed(1)}%</p>
+            <p className="text-sm text-muted-foreground">
+              {leastCPU.cpu.toFixed(1)}%
+            </p>
           </div>
 
           <div className="bg-card rounded-lg border shadow-sm p-4">
@@ -231,7 +226,9 @@ export default function ComparisonPage() {
               <h3 className="text-sm font-medium">Most Complete</h3>
             </div>
             <p className="text-2xl font-bold">{largestOutput.libraryName}</p>
-            <p className="text-sm text-muted-foreground">{formatBytes(largestOutput.outputSize)}</p>
+            <p className="text-sm text-muted-foreground">
+              {formatBytes(largestOutput.outputSize)}
+            </p>
           </div>
         </div>
 
@@ -259,34 +256,47 @@ export default function ComparisonPage() {
               </thead>
               <tbody>
                 {comparison.map((lib) => (
-                  <tr key={lib.libraryName} className="border-b hover:bg-muted/30 transition-colors">
+                  <tr
+                    key={lib.libraryName}
+                    className="border-b hover:bg-muted/30 transition-colors"
+                  >
                     <td className="p-4 font-semibold">{lib.libraryName}</td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
-                        {isWinner(lib, "time") && <Trophy className="w-4 h-4 text-yellow-500" />}
+                        {isWinner(lib, "time") && (
+                          <Trophy className="w-4 h-4 text-yellow-500" />
+                        )}
                         {formatTime(lib.time)}
                       </div>
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
-                        {isWinner(lib, "memory") && <Trophy className="w-4 h-4 text-yellow-500" />}
+                        {isWinner(lib, "memory") && (
+                          <Trophy className="w-4 h-4 text-yellow-500" />
+                        )}
                         {lib.memory > 0 ? `${lib.memory.toFixed(1)} MB` : "-"}
                       </div>
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
-                        {isWinner(lib, "cpu") && <Trophy className="w-4 h-4 text-yellow-500" />}
+                        {isWinner(lib, "cpu") && (
+                          <Trophy className="w-4 h-4 text-yellow-500" />
+                        )}
                         {lib.cpu > 0 ? `${lib.cpu.toFixed(1)}%` : "-"}
                       </div>
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
-                        {isWinner(lib, "output") && <Trophy className="w-4 h-4 text-yellow-500" />}
+                        {isWinner(lib, "output") && (
+                          <Trophy className="w-4 h-4 text-yellow-500" />
+                        )}
                         {formatBytes(lib.outputSize)}
                       </div>
                     </td>
                     <td className="p-4 text-muted-foreground">
-                      {lib.markdownLength > 0 ? lib.markdownLength.toLocaleString() + " chars" : "-"}
+                      {lib.markdownLength > 0
+                        ? lib.markdownLength.toLocaleString() + " chars"
+                        : "-"}
                     </td>
                     <td className="p-4 text-center">
                       {lib.images > 0 ? (
@@ -365,7 +375,13 @@ export default function ComparisonPage() {
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis dataKey="name" className="text-sm" />
-                <YAxis label={{ value: "Time (seconds)", angle: -90, position: "insideLeft" }} />
+                <YAxis
+                  label={{
+                    value: "Time (seconds)",
+                    angle: -90,
+                    position: "insideLeft",
+                  }}
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "hsl(var(--card))",
@@ -374,7 +390,11 @@ export default function ComparisonPage() {
                   }}
                 />
                 <Legend />
-                <Bar dataKey="time" fill="hsl(217, 91%, 60%)" name="Processing Time (s)" />
+                <Bar
+                  dataKey="time"
+                  fill="hsl(217, 91%, 60%)"
+                  name="Processing Time (s)"
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -389,7 +409,13 @@ export default function ComparisonPage() {
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis dataKey="name" className="text-sm" />
-                <YAxis label={{ value: "Memory (MB)", angle: -90, position: "insideLeft" }} />
+                <YAxis
+                  label={{
+                    value: "Memory (MB)",
+                    angle: -90,
+                    position: "insideLeft",
+                  }}
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "hsl(var(--card))",
@@ -398,7 +424,11 @@ export default function ComparisonPage() {
                   }}
                 />
                 <Legend />
-                <Bar dataKey="memory" fill="hsl(25, 95%, 53%)" name="Peak Memory (MB)" />
+                <Bar
+                  dataKey="memory"
+                  fill="hsl(25, 95%, 53%)"
+                  name="Peak Memory (MB)"
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -413,7 +443,13 @@ export default function ComparisonPage() {
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis dataKey="name" className="text-sm" />
-                <YAxis label={{ value: "CPU (%)", angle: -90, position: "insideLeft" }} />
+                <YAxis
+                  label={{
+                    value: "CPU (%)",
+                    angle: -90,
+                    position: "insideLeft",
+                  }}
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "hsl(var(--card))",
@@ -422,7 +458,11 @@ export default function ComparisonPage() {
                   }}
                 />
                 <Legend />
-                <Bar dataKey="cpu" fill="hsl(280, 65%, 60%)" name="Average CPU (%)" />
+                <Bar
+                  dataKey="cpu"
+                  fill="hsl(280, 65%, 60%)"
+                  name="Average CPU (%)"
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -437,7 +477,13 @@ export default function ComparisonPage() {
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis dataKey="name" className="text-sm" />
-                <YAxis label={{ value: "Size (KB)", angle: -90, position: "insideLeft" }} />
+                <YAxis
+                  label={{
+                    value: "Size (KB)",
+                    angle: -90,
+                    position: "insideLeft",
+                  }}
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "hsl(var(--card))",
@@ -446,7 +492,11 @@ export default function ComparisonPage() {
                   }}
                 />
                 <Legend />
-                <Bar dataKey="outputSize" fill="hsl(142, 76%, 36%)" name="Output Size (KB)" />
+                <Bar
+                  dataKey="outputSize"
+                  fill="hsl(142, 76%, 36%)"
+                  name="Output Size (KB)"
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>

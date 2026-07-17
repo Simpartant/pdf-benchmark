@@ -5,7 +5,13 @@ pydantic-settings>=2.1.0
 loguru>=0.7.2
 psutil>=5.9.0
 python-multipart>=0.0.9
+
+# PDF Processing Libraries
+pypdf>=6.0.0
+pdfplumber>=0.11.0
+pymupdf>=1.24.0
 docling>=1.0.0
 magic-pdf[full]>=0.7.0
 unstructured[pdf]>=0.10.0
-opendataloader>=0.1.0
+pillow-heif>=1.0.0  # Required for unstructured HEIF image support
+

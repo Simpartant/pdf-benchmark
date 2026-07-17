@@ -79,21 +79,6 @@ class LibraryService:
             ],
             "performance_notes": "Element-based extraction with high-resolution strategy",
         },
-        "opendataloader": {
-            "display_name": "OpenDataLoader",
-            "module": "opendataloader",
-            "description": "Unified data loading library for PDFs and documents",
-            "capabilities": [
-                "text_extraction",
-                "markdown_export",
-                "json_export",
-                "image_extraction",
-                "table_extraction",
-                "document_chunking",
-                "metadata_extraction",
-            ],
-            "performance_notes": "Document-based extraction with metadata support",
-        },
     }
 
     def __init__(self):

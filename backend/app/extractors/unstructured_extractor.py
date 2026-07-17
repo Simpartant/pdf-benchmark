@@ -41,10 +41,18 @@ class UnstructuredExtractor(BaseExtractor):
         """Check if Unstructured is installed."""
         try:
             import unstructured
-            logger.info(f"Unstructured available: version {unstructured.__version__}")
+            try:
+                from importlib.metadata import version
+                unstructured_version = version("unstructured")
+                logger.info(f"Unstructured available: version {unstructured_version}")
+            except Exception:
+                logger.info("Unstructured available (version unknown)")
             return True
         except ImportError:
             logger.warning("Unstructured not installed")
+            return False
+        except Exception as e:
+            logger.warning(f"Unstructured import failed with unexpected error: {e}")
             return False
 
     def extract(self, pdf_path: Path) -> ExtractionResult:
@@ -115,6 +123,20 @@ class UnstructuredExtractor(BaseExtractor):
             raise ImportError("Unstructured is not installed. Install with: pip install unstructured[pdf]")
 
         try:
+            # Suppress pi_heif import errors before importing unstructured
+            import sys
+            import unittest.mock as mock
+            
+            # Create a mock module for pi_heif if it's not available, as unstructured
+            # tries to import it but it's optional
+            try:
+                import pi_heif  # noqa: F401
+            except ImportError:
+                logger.debug("pi_heif not available, creating mock module")
+                mock_pi_heif = mock.MagicMock()
+                mock_pi_heif.HeifFile = mock.MagicMock()
+                sys.modules['pi_heif'] = mock_pi_heif
+            
             # Import Unstructured components
             from unstructured.partition.pdf import partition_pdf
             from unstructured.staging.base import elements_to_json
@@ -166,6 +188,10 @@ class UnstructuredExtractor(BaseExtractor):
         except Exception as e:
             logger.error(f"Unstructured extraction failed: {e}", exc_info=True)
             raise Exception(f"Unstructured extraction error: {e}")
+        finally:
+            # Clean up mock if it was added
+            if 'pi_heif' in sys.modules and hasattr(sys.modules['pi_heif'], '_mock_return'):
+                del sys.modules['pi_heif']
 
     def _elements_to_markdown(self, elements: list) -> str:
         """

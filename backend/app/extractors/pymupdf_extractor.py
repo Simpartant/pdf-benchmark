@@ -1,6 +1,7 @@
-"""PyMuPDF extractor implementation (interface only)."""
+"""PyMuPDF extractor implementation."""
 
 from pathlib import Path
+from loguru import logger
 
 from app.extractors.base_extractor import BaseExtractor
 from app.models.extraction_result import ExtractionResult
@@ -25,13 +26,54 @@ class PyMuPDFExtractor(BaseExtractor):
         # Validate PDF
         self.validate_pdf(pdf_path)
         
-        # TODO: Implement PyMuPDF extraction
-        # This is just an interface placeholder
-        return ExtractionResult(
-            library_name=self.library_name,
-            success=False,
-            error_message="Extraction not implemented yet",
-        )
+        try:
+            import pymupdf  # imports as 'fitz' internally
+            
+            # Open PDF
+            doc = pymupdf.open(str(pdf_path))
+            
+            # Extract text from all pages
+            text_parts = []
+            images_count = 0
+            
+            for page in doc:
+                # Extract text
+                page_text = page.get_text()
+                text_parts.append(page_text)
+                
+                # Count images
+                images = page.get_images()
+                if images:
+                    images_count += len(images)
+            
+            text = "\n".join(text_parts)
+            
+            # Close document
+            doc.close()
+            
+            return ExtractionResult(
+                library_name=self.library_name,
+                success=True,
+                text_content=text,
+                pages_extracted=len(doc),
+                char_count=len(text),
+                word_count=len(text.split()),
+                images_count=images_count,
+            )
+            
+        except ImportError:
+            return ExtractionResult(
+                library_name=self.library_name,
+                success=False,
+                error_message="PyMuPDF is not installed. Install with: pip install pymupdf",
+            )
+        except Exception as e:
+            logger.error(f"PyMuPDF extraction failed: {e}")
+            return ExtractionResult(
+                library_name=self.library_name,
+                success=False,
+                error_message=str(e),
+            )
 
     def extract_text(self, pdf_path: Path) -> str:
         """
@@ -46,6 +88,26 @@ class PyMuPDFExtractor(BaseExtractor):
         # Validate PDF
         self.validate_pdf(pdf_path)
         
-        # TODO: Implement actual PyMuPDF extraction
-        # For now, return placeholder
-        raise NotImplementedError("PyMuPDF extraction not implemented yet")
+        try:
+            import pymupdf  # imports as 'fitz' internally
+            
+            # Open PDF
+            doc = pymupdf.open(str(pdf_path))
+            
+            # Extract text from all pages
+            text_parts = []
+            for page in doc:
+                text_parts.append(page.get_text())
+            
+            text = "\n".join(text_parts)
+            
+            # Close document
+            doc.close()
+            
+            return text
+            
+        except ImportError:
+            raise ImportError("PyMuPDF is not installed. Install with: pip install pymupdf")
+        except Exception as e:
+            logger.error(f"PyMuPDF extraction failed: {e}")
+            raise

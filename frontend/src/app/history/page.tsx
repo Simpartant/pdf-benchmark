@@ -43,7 +43,14 @@ export default function HistoryPage() {
       pdfSize: 2457600,
       pdfPages: 45,
       executedAt: "2026-07-15T14:30:22Z",
-      libraries: ["PyPDF", "PDFPlumber", "PyMuPDF", "Docling", "MinerU", "Unstructured"],
+      libraries: [
+        "PyPDF",
+        "PDFPlumber",
+        "PyMuPDF",
+        "Docling",
+        "MinerU",
+        "Unstructured",
+      ],
       totalLibraries: 6,
       successfulLibraries: 5,
       failedLibraries: 1,
@@ -56,8 +63,15 @@ export default function HistoryPage() {
       pdfSize: 5242880,
       pdfPages: 120,
       executedAt: "2026-07-14T09:30:15Z",
-      libraries: ["PyPDF", "PDFPlumber", "PyMuPDF", "Docling", "MinerU", "Unstructured", "OpenDataLoader"],
-      totalLibraries: 7,
+      libraries: [
+        "PyPDF",
+        "PDFPlumber",
+        "PyMuPDF",
+        "Docling",
+        "MinerU",
+        "Unstructured",
+      ],
+      totalLibraries: 6,
       successfulLibraries: 7,
       failedLibraries: 0,
       totalTime: 15678.43,
@@ -118,7 +132,9 @@ export default function HistoryPage() {
   ]);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<"date" | "name" | "size" | "pages" | "time">("date");
+  const [sortBy, setSortBy] = useState<
+    "date" | "name" | "size" | "pages" | "time"
+  >("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [selectedBenchmarks, setSelectedBenchmarks] = useState<string[]>([]);
 
@@ -128,14 +144,17 @@ export default function HistoryPage() {
       (b) =>
         b.pdfName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         b.benchmarkId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.libraries.some((lib) => lib.toLowerCase().includes(searchQuery.toLowerCase()))
+        b.libraries.some((lib) =>
+          lib.toLowerCase().includes(searchQuery.toLowerCase()),
+        ),
     );
 
     filtered.sort((a, b) => {
       let comparison = 0;
       switch (sortBy) {
         case "date":
-          comparison = new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime();
+          comparison =
+            new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime();
           break;
         case "name":
           comparison = a.pdfName.localeCompare(b.pdfName);
@@ -169,7 +188,7 @@ export default function HistoryPage() {
     setSelectedBenchmarks((prev) =>
       prev.includes(benchmarkId)
         ? prev.filter((id) => id !== benchmarkId)
-        : [...prev, benchmarkId]
+        : [...prev, benchmarkId],
     );
   };
 
@@ -246,7 +265,10 @@ export default function HistoryPage() {
           </div>
           <div className="flex items-center gap-2">
             <span className="px-3 py-1.5 bg-card border rounded-lg text-sm">
-              <span className="font-semibold">{filteredAndSortedBenchmarks.length}</span> benchmarks
+              <span className="font-semibold">
+                {filteredAndSortedBenchmarks.length}
+              </span>{" "}
+              benchmarks
             </span>
           </div>
         </div>
@@ -321,7 +343,9 @@ export default function HistoryPage() {
                 <option value="time">Sort by Time</option>
               </select>
               <button
-                onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                onClick={() =>
+                  setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+                }
                 className="px-3 py-2 border rounded-lg bg-background hover:bg-muted transition-colors"
                 title={sortOrder === "asc" ? "Ascending" : "Descending"}
               >
@@ -374,8 +398,12 @@ export default function HistoryPage() {
                     {/* Checkbox */}
                     <input
                       type="checkbox"
-                      checked={selectedBenchmarks.includes(benchmark.benchmarkId)}
-                      onChange={() => toggleBenchmarkSelection(benchmark.benchmarkId)}
+                      checked={selectedBenchmarks.includes(
+                        benchmark.benchmarkId,
+                      )}
+                      onChange={() =>
+                        toggleBenchmarkSelection(benchmark.benchmarkId)
+                      }
                       className="mt-1 w-4 h-4 rounded border-gray-300 focus:ring-2 focus:ring-primary"
                     />
 
@@ -385,7 +413,9 @@ export default function HistoryPage() {
                       <div className="flex items-start justify-between gap-4 mb-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-3 mb-1">
-                            <h3 className="text-lg font-semibold truncate">{benchmark.pdfName}</h3>
+                            <h3 className="text-lg font-semibold truncate">
+                              {benchmark.pdfName}
+                            </h3>
                             {benchmark.status === "completed" ? (
                               <span className="flex items-center gap-1 px-2 py-0.5 bg-green-500/10 text-green-500 rounded-full text-xs shrink-0">
                                 <CheckCircle2 className="w-3 h-3" />
@@ -403,7 +433,9 @@ export default function HistoryPage() {
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-muted-foreground">ID: {benchmark.benchmarkId}</p>
+                          <p className="text-sm text-muted-foreground">
+                            ID: {benchmark.benchmarkId}
+                          </p>
                         </div>
 
                         {/* Action Buttons */}
@@ -416,7 +448,12 @@ export default function HistoryPage() {
                             <Eye className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDownload(benchmark.benchmarkId, benchmark.pdfName)}
+                            onClick={() =>
+                              handleDownload(
+                                benchmark.benchmarkId,
+                                benchmark.pdfName,
+                              )
+                            }
                             className="p-2 hover:bg-muted rounded-lg transition-colors"
                             title="Download Results"
                           >
@@ -437,39 +474,57 @@ export default function HistoryPage() {
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-muted-foreground" />
                           <div>
-                            <p className="text-xs text-muted-foreground">Executed</p>
-                            <p className="text-sm font-medium">{formatDate(benchmark.executedAt)}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Executed
+                            </p>
+                            <p className="text-sm font-medium">
+                              {formatDate(benchmark.executedAt)}
+                            </p>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
                           <FileText className="w-4 h-4 text-muted-foreground" />
                           <div>
-                            <p className="text-xs text-muted-foreground">Size</p>
-                            <p className="text-sm font-medium">{formatBytes(benchmark.pdfSize)}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Size
+                            </p>
+                            <p className="text-sm font-medium">
+                              {formatBytes(benchmark.pdfSize)}
+                            </p>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
                           <FileText className="w-4 h-4 text-muted-foreground" />
                           <div>
-                            <p className="text-xs text-muted-foreground">Pages</p>
-                            <p className="text-sm font-medium">{benchmark.pdfPages}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Pages
+                            </p>
+                            <p className="text-sm font-medium">
+                              {benchmark.pdfPages}
+                            </p>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
                           <Archive className="w-4 h-4 text-muted-foreground" />
                           <div>
-                            <p className="text-xs text-muted-foreground">Libraries</p>
-                            <p className="text-sm font-medium">{benchmark.totalLibraries}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Libraries
+                            </p>
+                            <p className="text-sm font-medium">
+                              {benchmark.totalLibraries}
+                            </p>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
                           <CheckCircle2 className="w-4 h-4 text-green-500" />
                           <div>
-                            <p className="text-xs text-muted-foreground">Success</p>
+                            <p className="text-xs text-muted-foreground">
+                              Success
+                            </p>
                             <p className="text-sm font-medium text-green-500">
                               {benchmark.successfulLibraries}
                             </p>
@@ -479,15 +534,21 @@ export default function HistoryPage() {
                         <div className="flex items-center gap-2">
                           <Clock className="w-4 h-4 text-blue-500" />
                           <div>
-                            <p className="text-xs text-muted-foreground">Total Time</p>
-                            <p className="text-sm font-medium">{formatTime(benchmark.totalTime)}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Total Time
+                            </p>
+                            <p className="text-sm font-medium">
+                              {formatTime(benchmark.totalTime)}
+                            </p>
                           </div>
                         </div>
                       </div>
 
                       {/* Libraries */}
                       <div>
-                        <p className="text-xs text-muted-foreground mb-2">Libraries tested:</p>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Libraries tested:
+                        </p>
                         <div className="flex flex-wrap gap-2">
                           {benchmark.libraries.map((lib) => (
                             <span

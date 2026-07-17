@@ -11,7 +11,6 @@ from app.extractors.pymupdf_extractor import PyMuPDFExtractor
 from app.extractors.docling_extractor import DoclingExtractor
 from app.extractors.mineru_extractor import MinerUExtractor
 from app.extractors.unstructured_extractor import UnstructuredExtractor
-from app.extractors.opendataloader_extractor import OpenDataLoaderExtractor
 from app.models.extraction_result import ExtractionResult
 from app.models.document import PDFDocument
 from app.benchmark.benchmark_engine import BenchmarkEngine
@@ -36,7 +35,6 @@ class ExtractionService:
             "docling": DoclingExtractor(),
             "mineru": MinerUExtractor(),
             "unstructured": UnstructuredExtractor(),
-            "opendataloader": OpenDataLoaderExtractor(),
         }
         self.benchmark_engine = benchmark_engine or BenchmarkEngine()
         self.report_service = ReportService()

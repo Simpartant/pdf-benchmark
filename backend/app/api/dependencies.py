@@ -1,6 +1,6 @@
 """Dependency injection for API endpoints."""
 
-from typing import Annotated
+from typing import Annotated, Optional
 from fastapi import Depends
 
 from app.services.library_service import LibraryService
@@ -12,12 +12,12 @@ from app.benchmark.result_storage import ResultStorageService
 
 
 # Service instances (singleton pattern)
-_library_service: LibraryService | None = None
-_extraction_service: ExtractionService | None = None
-_history_service: HistoryService | None = None
-_benchmark_service: BenchmarkService | None = None
-_benchmark_engine: BenchmarkEngine | None = None
-_result_storage: ResultStorageService | None = None
+_library_service: Optional[LibraryService] = None
+_extraction_service: Optional[ExtractionService] = None
+_history_service: Optional[HistoryService] = None
+_benchmark_service: Optional[BenchmarkService] = None
+_benchmark_engine: Optional[BenchmarkEngine] = None
+_result_storage: Optional[ResultStorageService] = None
 
 
 def get_benchmark_engine() -> BenchmarkEngine:

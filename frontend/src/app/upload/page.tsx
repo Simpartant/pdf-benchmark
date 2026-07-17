@@ -16,8 +16,9 @@ export default function UploadPage() {
   } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [selectedLibrary, setSelectedLibrary] = useState<string>("docling");
-  const [benchmarkResult, setBenchmarkResult] = useState<BenchmarkResponse | null>(null);
-  
+  const [benchmarkResult, setBenchmarkResult] =
+    useState<BenchmarkResponse | null>(null);
+
   // Use React Query mutation for upload
   const uploadMutation = useUploadBenchmark();
 
@@ -52,11 +53,6 @@ export default function UploadPage() {
       name: "Unstructured",
       description: "Element-based extraction",
     },
-    {
-      id: "opendataloader",
-      name: "OpenDataLoader",
-      description: "Unified data loading",
-    },
   ];
 
   const formatFileSize = (bytes: number): string => {
@@ -88,7 +84,7 @@ export default function UploadPage() {
         handleFileSelect(files[0]);
       }
     },
-    [handleFileSelect]
+    [handleFileSelect],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -108,7 +104,7 @@ export default function UploadPage() {
         handleFileSelect(files[0]);
       }
     },
-    [handleFileSelect]
+    [handleFileSelect],
   );
 
   const handleRunBenchmark = async () => {
@@ -119,19 +115,21 @@ export default function UploadPage() {
     uploadMutation.mutate(
       {
         file: selectedFile,
-        library: selectedLibrary,
+        extractors: [selectedLibrary], // Convert single library to array
+        extractImages: false,
+        extractTables: false,
       },
       {
         onSuccess: (data) => {
           setBenchmarkResult(data);
           // Store in session storage for results page
-          sessionStorage.setItem(`benchmark_${data.benchmark_id}`, JSON.stringify(data));
+          sessionStorage.setItem(`benchmark_${data.id}`, JSON.stringify(data));
           // Redirect after success
           setTimeout(() => {
-            router.push(`/results?id=${data.benchmark_id}`);
+            router.push(`/results?id=${data.id}`);
           }, 1500);
         },
-      }
+      },
     );
   };
 
@@ -211,7 +209,7 @@ export default function UploadPage() {
                   </p>
                 </div>
               )}
-              
+
               {uploadMutation.isSuccess && benchmarkResult && (
                 <div className="mt-4 p-4 bg-green-500/10 border border-green-500/20 rounded-lg flex items-start gap-3">
                   <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5" />
@@ -229,9 +227,7 @@ export default function UploadPage() {
 
             {fileInfo && (
               <div className="bg-card rounded-lg border shadow-sm p-6">
-                <h2 className="text-xl font-semibold mb-4">
-                  File Information
-                </h2>
+                <h2 className="text-xl font-semibold mb-4">File Information</h2>
                 <div className="space-y-3">
                   <div className="flex items-start gap-3 p-4 bg-muted/50 rounded-lg">
                     <File className="w-5 h-5 text-primary mt-0.5" />
@@ -253,9 +249,7 @@ export default function UploadPage() {
 
           <div className="lg:col-span-1">
             <div className="bg-card rounded-lg border shadow-sm p-6 sticky top-4">
-              <h2 className="text-xl font-semibold mb-4">
-                Select Library
-              </h2>
+              <h2 className="text-xl font-semibold mb-4">Select Library</h2>
               <p className="text-sm text-muted-foreground mb-4">
                 Choose which extraction library to benchmark
               </p>
@@ -290,7 +284,10 @@ export default function UploadPage() {
 
               <div className="pt-4 border-t">
                 <p className="text-sm text-muted-foreground mb-4">
-                  Selected: <span className="font-medium">{libraries.find(l => l.id === selectedLibrary)?.name}</span>
+                  Selected:{" "}
+                  <span className="font-medium">
+                    {libraries.find((l) => l.id === selectedLibrary)?.name}
+                  </span>
                 </p>
                 <button
                   onClick={handleRunBenchmark}
@@ -337,7 +334,9 @@ export default function UploadPage() {
             </p>
           </div>
           <div className="bg-card rounded-lg border p-4">
-            <h3 className="font-semibold text-sm mb-1">Comprehensive Results</h3>
+            <h3 className="font-semibold text-sm mb-1">
+              Comprehensive Results
+            </h3>
             <p className="text-xs text-muted-foreground">
               View detailed extraction metrics and outputs
             </p>

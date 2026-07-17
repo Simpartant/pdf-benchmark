@@ -1,15 +1,23 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { uploadAndBenchmark, checkHealth, getSystemInfo } from "@/lib/api/benchmark";
-import type { UploadBenchmarkRequest } from "@/lib/api/types";
+import {
+  uploadAndBenchmark,
+  checkHealth,
+  getSystemInfo,
+} from "@/lib/api/benchmark";
+import type {
+  UploadBenchmarkRequest,
+  BenchmarkResponse,
+} from "@/lib/api/types";
 
 /**
  * Hook for uploading PDF and running benchmark
  */
 export function useUploadBenchmark() {
-  return useMutation({
-    mutationFn: (request: UploadBenchmarkRequest) => uploadAndBenchmark(request),
+  return useMutation<BenchmarkResponse, Error, UploadBenchmarkRequest>({
+    mutationFn: (request: UploadBenchmarkRequest) =>
+      uploadAndBenchmark(request),
     retry: false,
   });
 }
