@@ -14,111 +14,30 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Filter,
   Archive,
+  Loader2,
 } from "lucide-react";
-
-interface BenchmarkMetadata {
-  benchmarkId: string;
-  pdfName: string;
-  pdfSize: number;
-  pdfPages: number;
-  executedAt: string;
-  libraries: string[];
-  totalLibraries: number;
-  successfulLibraries: number;
-  failedLibraries: number;
-  totalTime: number;
-  status: "completed" | "failed" | "in-progress";
-}
+import { useBenchmarkHistory, useDeleteHistory } from "@/hooks/useBenchmark";
+import type { HistoryRecord } from "@/lib/api/types";
 
 export default function HistoryPage() {
   const router = useRouter();
 
-  // Mock data - Replace with actual API call to read benchmark.json and metadata.json
-  const [benchmarks] = useState<BenchmarkMetadata[]>([
-    {
-      benchmarkId: "bench_2026_07_15_143022",
-      pdfName: "annual-report-2025.pdf",
-      pdfSize: 2457600,
-      pdfPages: 45,
-      executedAt: "2026-07-15T14:30:22Z",
-      libraries: ["PyPDF", "PDFPlumber", "PyMuPDF", "Docling", "MinerU", "Unstructured"],
-      totalLibraries: 6,
-      successfulLibraries: 5,
-      failedLibraries: 1,
-      totalTime: 8234.56,
-      status: "completed",
-    },
-    {
-      benchmarkId: "bench_2026_07_14_093015",
-      pdfName: "technical-manual.pdf",
-      pdfSize: 5242880,
-      pdfPages: 120,
-      executedAt: "2026-07-14T09:30:15Z",
-      libraries: ["PyPDF", "PDFPlumber", "PyMuPDF", "Docling", "MinerU", "Unstructured", "OpenDataLoader"],
-      totalLibraries: 7,
-      successfulLibraries: 7,
-      failedLibraries: 0,
-      totalTime: 15678.43,
-      status: "completed",
-    },
-    {
-      benchmarkId: "bench_2026_07_13_162045",
-      pdfName: "research-paper.pdf",
-      pdfSize: 1048576,
-      pdfPages: 12,
-      executedAt: "2026-07-13T16:20:45Z",
-      libraries: ["Docling", "MinerU", "Unstructured"],
-      totalLibraries: 3,
-      successfulLibraries: 3,
-      failedLibraries: 0,
-      totalTime: 3456.78,
-      status: "completed",
-    },
-    {
-      benchmarkId: "bench_2026_07_12_110330",
-      pdfName: "invoice-template.pdf",
-      pdfSize: 524288,
-      pdfPages: 2,
-      executedAt: "2026-07-12T11:03:30Z",
-      libraries: ["PyPDF", "PyMuPDF"],
-      totalLibraries: 2,
-      successfulLibraries: 2,
-      failedLibraries: 0,
-      totalTime: 567.89,
-      status: "completed",
-    },
-    {
-      benchmarkId: "bench_2026_07_11_154512",
-      pdfName: "presentation-deck.pdf",
-      pdfSize: 8388608,
-      pdfPages: 75,
-      executedAt: "2026-07-11T15:45:12Z",
-      libraries: ["PyPDF", "PDFPlumber", "PyMuPDF", "Docling"],
-      totalLibraries: 4,
-      successfulLibraries: 2,
-      failedLibraries: 2,
-      totalTime: 9876.54,
-      status: "completed",
-    },
-    {
-      benchmarkId: "bench_2026_07_10_084020",
-      pdfName: "legal-document.pdf",
-      pdfSize: 3145728,
-      pdfPages: 89,
-      executedAt: "2026-07-10T08:40:20Z",
-      libraries: ["Docling", "MinerU"],
-      totalLibraries: 2,
-      successfulLibraries: 0,
-      failedLibraries: 2,
-      totalTime: 0,
-      status: "failed",
-    },
-  ]);
+  // Real API hooks
+  const {
+    data: historyData,
+    isLoading,
+    error,
+    refetch,
+  } = useBenchmarkHistory();
+  const deleteMutation = useDeleteHistory();
+
+  const benchmarks: HistoryRecord[] = historyData?.history || [];
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<"date" | "name" | "size" | "pages" | "time">("date");
+  const [sortBy, setSortBy] = useState<
+    "date" | "name" | "size" | "pages" | "time"
+  >("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [selectedBenchmarks, setSelectedBenchmarks] = useState<string[]>([]);
 
@@ -126,28 +45,29 @@ export default function HistoryPage() {
   const filteredAndSortedBenchmarks = useMemo(() => {
     let filtered = benchmarks.filter(
       (b) =>
-        b.pdfName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.benchmarkId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.libraries.some((lib) => lib.toLowerCase().includes(searchQuery.toLowerCase()))
+        b.filename.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        b.runId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        b.selectedLibrary.toLowerCase().includes(searchQuery.toLowerCase()),
     );
 
     filtered.sort((a, b) => {
       let comparison = 0;
       switch (sortBy) {
         case "date":
-          comparison = new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime();
+          comparison =
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
           break;
         case "name":
-          comparison = a.pdfName.localeCompare(b.pdfName);
+          comparison = a.filename.localeCompare(b.filename);
           break;
         case "size":
-          comparison = a.pdfSize - b.pdfSize;
+          comparison = a.outputSize - b.outputSize;
           break;
         case "pages":
-          comparison = a.pdfPages - b.pdfPages;
+          comparison = a.pageCount - b.pageCount;
           break;
         case "time":
-          comparison = a.totalTime - b.totalTime;
+          comparison = a.processingTime - b.processingTime;
           break;
       }
       return sortOrder === "asc" ? comparison : -comparison;
@@ -169,22 +89,33 @@ export default function HistoryPage() {
     setSelectedBenchmarks((prev) =>
       prev.includes(benchmarkId)
         ? prev.filter((id) => id !== benchmarkId)
-        : [...prev, benchmarkId]
+        : [...prev, benchmarkId],
     );
   };
 
-  const handleDelete = (benchmarkId: string) => {
+  const handleDelete = async (benchmarkId: string) => {
     if (confirm("Are you sure you want to delete this benchmark?")) {
-      // API call to delete benchmark
-      console.log("Delete benchmark:", benchmarkId);
+      try {
+        await deleteMutation.mutateAsync(benchmarkId);
+        refetch();
+      } catch (err) {
+        console.error("Failed to delete benchmark:", err);
+      }
     }
   };
 
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = async () => {
     if (selectedBenchmarks.length === 0) return;
     if (confirm(`Delete ${selectedBenchmarks.length} selected benchmark(s)?`)) {
-      console.log("Delete benchmarks:", selectedBenchmarks);
-      setSelectedBenchmarks([]);
+      try {
+        await Promise.all(
+          selectedBenchmarks.map((id) => deleteMutation.mutateAsync(id)),
+        );
+        setSelectedBenchmarks([]);
+        refetch();
+      } catch (err) {
+        console.error("Failed to delete benchmarks:", err);
+      }
     }
   };
 
@@ -197,17 +128,22 @@ export default function HistoryPage() {
       alert("You can compare up to 4 benchmarks at once");
       return;
     }
-    router.push(`/comparison?ids=${selectedBenchmarks.join(",")}`);
+    // Use the first selected benchmark's benchmarkGroupId
+    const firstSelected = benchmarks.find(
+      (b) => b.runId === selectedBenchmarks[0],
+    );
+    if (firstSelected?.benchmarkGroupId) {
+      router.push(`/compare/${firstSelected.benchmarkGroupId}`);
+    }
   };
 
   const handleDownload = (benchmarkId: string, pdfName: string) => {
-    // API call to download benchmark results
-    console.log("Download benchmark:", benchmarkId);
-    alert(`Downloading results for ${pdfName}`);
+    // Navigate to the results page
+    router.push(`/results/${benchmarkId}`);
   };
 
   const handleOpen = (benchmarkId: string) => {
-    router.push(`/results?id=${benchmarkId}`);
+    router.push(`/results/${benchmarkId}`);
   };
 
   const formatBytes = (bytes: number): string => {
@@ -233,6 +169,35 @@ export default function HistoryPage() {
     });
   };
 
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 p-4 md:p-8 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading benchmark history...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 p-4 md:p-8 flex items-center justify-center">
+        <div className="bg-card rounded-lg border shadow-sm p-8 max-w-md text-center">
+          <XCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2">Failed to Load History</h2>
+          <p className="text-muted-foreground">
+            {error instanceof Error
+              ? error.message
+              : "An unexpected error occurred"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -246,7 +211,10 @@ export default function HistoryPage() {
           </div>
           <div className="flex items-center gap-2">
             <span className="px-3 py-1.5 bg-card border rounded-lg text-sm">
-              <span className="font-semibold">{filteredAndSortedBenchmarks.length}</span> benchmarks
+              <span className="font-semibold">
+                {filteredAndSortedBenchmarks.length}
+              </span>{" "}
+              benchmarks
             </span>
           </div>
         </div>
@@ -267,14 +235,14 @@ export default function HistoryPage() {
               <h3 className="text-sm font-medium">Completed</h3>
             </div>
             <p className="text-2xl font-bold text-green-500">
-              {benchmarks.filter((b) => b.status === "completed").length}
+              {benchmarks.filter((b) => b.status === "success").length}
             </p>
           </div>
 
           <div className="bg-card rounded-lg border shadow-sm p-4">
             <div className="flex items-center gap-2 mb-2">
               <XCircle className="w-5 h-5 text-red-500" />
-              <h3 className="text-sm font-medium">Failed</h3>
+              <h3 className="text-sm font-medium">Has Failures</h3>
             </div>
             <p className="text-2xl font-bold text-red-500">
               {benchmarks.filter((b) => b.status === "failed").length}
@@ -287,7 +255,9 @@ export default function HistoryPage() {
               <h3 className="text-sm font-medium">Total Time</h3>
             </div>
             <p className="text-2xl font-bold">
-              {formatTime(benchmarks.reduce((sum, b) => sum + b.totalTime, 0))}
+              {formatTime(
+                benchmarks.reduce((sum, b) => sum + b.processingTime, 0),
+              )}
             </p>
           </div>
         </div>
@@ -321,7 +291,9 @@ export default function HistoryPage() {
                 <option value="time">Sort by Time</option>
               </select>
               <button
-                onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                onClick={() =>
+                  setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+                }
                 className="px-3 py-2 border rounded-lg bg-background hover:bg-muted transition-colors"
                 title={sortOrder === "asc" ? "Ascending" : "Descending"}
               >
@@ -366,7 +338,7 @@ export default function HistoryPage() {
           <div className="space-y-4">
             {filteredAndSortedBenchmarks.map((benchmark) => (
               <div
-                key={benchmark.benchmarkId}
+                key={benchmark.runId}
                 className="bg-card rounded-lg border shadow-sm hover:shadow-md transition-shadow overflow-hidden"
               >
                 <div className="p-6">
@@ -374,8 +346,8 @@ export default function HistoryPage() {
                     {/* Checkbox */}
                     <input
                       type="checkbox"
-                      checked={selectedBenchmarks.includes(benchmark.benchmarkId)}
-                      onChange={() => toggleBenchmarkSelection(benchmark.benchmarkId)}
+                      checked={selectedBenchmarks.includes(benchmark.runId)}
+                      onChange={() => toggleBenchmarkSelection(benchmark.runId)}
                       className="mt-1 w-4 h-4 rounded border-gray-300 focus:ring-2 focus:ring-primary"
                     />
 
@@ -385,8 +357,10 @@ export default function HistoryPage() {
                       <div className="flex items-start justify-between gap-4 mb-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-3 mb-1">
-                            <h3 className="text-lg font-semibold truncate">{benchmark.pdfName}</h3>
-                            {benchmark.status === "completed" ? (
+                            <h3 className="text-lg font-semibold truncate">
+                              {benchmark.filename}
+                            </h3>
+                            {benchmark.status === "success" ? (
                               <span className="flex items-center gap-1 px-2 py-0.5 bg-green-500/10 text-green-500 rounded-full text-xs shrink-0">
                                 <CheckCircle2 className="w-3 h-3" />
                                 Completed
@@ -397,33 +371,40 @@ export default function HistoryPage() {
                                 Failed
                               </span>
                             ) : (
-                              <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-500/10 text-blue-500 rounded-full text-xs shrink-0">
-                                <Clock className="w-3 h-3" />
-                                In Progress
+                              <span className="flex items-center gap-1 px-2 py-0.5 bg-yellow-500/10 text-yellow-500 rounded-full text-xs shrink-0">
+                                <XCircle className="w-3 h-3" />
+                                Partial
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-muted-foreground">ID: {benchmark.benchmarkId}</p>
+                          <p className="text-sm text-muted-foreground">
+                            ID: {benchmark.runId}
+                          </p>
                         </div>
 
                         {/* Action Buttons */}
                         <div className="flex items-center gap-2 shrink-0">
                           <button
-                            onClick={() => handleOpen(benchmark.benchmarkId)}
+                            onClick={() => handleOpen(benchmark.runId)}
                             className="p-2 hover:bg-muted rounded-lg transition-colors"
                             title="Open Results"
                           >
                             <Eye className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDownload(benchmark.benchmarkId, benchmark.pdfName)}
+                            onClick={() =>
+                              handleDownload(
+                                benchmark.runId,
+                                benchmark.filename,
+                              )
+                            }
                             className="p-2 hover:bg-muted rounded-lg transition-colors"
-                            title="Download Results"
+                            title="View Details"
                           >
                             <Download className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDelete(benchmark.benchmarkId)}
+                            onClick={() => handleDelete(benchmark.runId)}
                             className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg transition-colors"
                             title="Delete"
                           >
@@ -437,41 +418,47 @@ export default function HistoryPage() {
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-muted-foreground" />
                           <div>
-                            <p className="text-xs text-muted-foreground">Executed</p>
-                            <p className="text-sm font-medium">{formatDate(benchmark.executedAt)}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Executed
+                            </p>
+                            <p className="text-sm font-medium">
+                              {formatDate(benchmark.createdAt)}
+                            </p>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
                           <FileText className="w-4 h-4 text-muted-foreground" />
                           <div>
-                            <p className="text-xs text-muted-foreground">Size</p>
-                            <p className="text-sm font-medium">{formatBytes(benchmark.pdfSize)}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-muted-foreground" />
-                          <div>
-                            <p className="text-xs text-muted-foreground">Pages</p>
-                            <p className="text-sm font-medium">{benchmark.pdfPages}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Duration
+                            </p>
+                            <p className="text-sm font-medium">
+                              {formatTime(benchmark.processingTime)}
+                            </p>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
                           <Archive className="w-4 h-4 text-muted-foreground" />
                           <div>
-                            <p className="text-xs text-muted-foreground">Libraries</p>
-                            <p className="text-sm font-medium">{benchmark.totalLibraries}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Library
+                            </p>
+                            <p className="text-sm font-medium">
+                              {benchmark.selectedLibrary}
+                            </p>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
                           <CheckCircle2 className="w-4 h-4 text-green-500" />
                           <div>
-                            <p className="text-xs text-muted-foreground">Success</p>
+                            <p className="text-xs text-muted-foreground">
+                              Pages
+                            </p>
                             <p className="text-sm font-medium text-green-500">
-                              {benchmark.successfulLibraries}
+                              {benchmark.pageCount}
                             </p>
                           </div>
                         </div>
@@ -479,24 +466,25 @@ export default function HistoryPage() {
                         <div className="flex items-center gap-2">
                           <Clock className="w-4 h-4 text-blue-500" />
                           <div>
-                            <p className="text-xs text-muted-foreground">Total Time</p>
-                            <p className="text-sm font-medium">{formatTime(benchmark.totalTime)}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Memory
+                            </p>
+                            <p className="text-sm font-medium">
+                              {benchmark.peakMemory.toFixed(1)} MB
+                            </p>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Libraries */}
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-2">Libraries tested:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {benchmark.libraries.map((lib) => (
-                            <span
-                              key={lib}
-                              className="px-2 py-1 bg-muted/50 text-xs rounded border"
-                            >
-                              {lib}
-                            </span>
-                          ))}
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-purple-500" />
+                          <div>
+                            <p className="text-xs text-muted-foreground">
+                              Output Size
+                            </p>
+                            <p className="text-sm font-medium">
+                              {formatBytes(benchmark.outputSize)}
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>

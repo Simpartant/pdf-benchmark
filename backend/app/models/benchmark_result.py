@@ -34,6 +34,19 @@ class BenchmarkResult:
         self.created_at = created_at or datetime.now()
         self.metadata = metadata or {}
 
+    @property
+    def status(self) -> str:
+        """Calculate overall status based on extraction results."""
+        if not self.extraction_results:
+            return "failed"
+        success_count = sum(1 for r in self.extraction_results if r.status == "success")
+        if success_count == len(self.extraction_results):
+            return "completed"
+        elif success_count > 0:
+            return "partial"
+        else:
+            return "failed"
+
     def calculate_summary(self) -> None:
         """Calculate summary statistics."""
         if not self.extraction_results:

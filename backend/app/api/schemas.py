@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 
 # Health schemas
 class HealthResponse(BaseModel):
-    """Health check response."""
     status: str
     version: str
     pythonVersion: str = Field(alias="python_version")
@@ -16,54 +15,67 @@ class HealthResponse(BaseModel):
 
 
 # Library schemas
+class DependencyInfo(BaseModel):
+    name: str
+    module: str
+    installed: bool
+    version: Optional[str] = None
+    error: Optional[str] = None
+
+
 class LibraryResponse(BaseModel):
-    """Library information response."""
-    name: str = Field(description="Library identifier")
+    name: str = Field(description="Library identifier (library_id)")
     displayName: str = Field(alias="display_name", description="Human-readable library name")
-    installed: bool = Field(description="Whether the library is installed")
-    version: Optional[str] = Field(default=None, description="Installed version")
-    status: str = Field(description="Library status (available, not_installed, error)")
-    description: Optional[str] = Field(default=None, description="Library description")
-    capabilities: List[str] = Field(default_factory=list, description="Library capabilities")
-    performanceNotes: Optional[str] = Field(default=None, alias="performance_notes", description="Performance notes")
-    
-    model_config = {"populate_by_name": True}
+    version: str = Field(default="unknown", description="Installed version or 'unknown'")
+    status: str = Field(description="available, not_installed, or error")
+    installed: bool = Field(description="Whether the library is usable")
+    description: Optional[str] = None
+    capabilities: List[str] = Field(default_factory=list)
+    performanceNotes: Optional[str] = Field(default=None, alias="performance_notes")
+    dependencies: List[DependencyInfo] = Field(default_factory=list)
+    diagnostics: List[str] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
 
 
 class LibrariesResponse(BaseModel):
-    """List of libraries response."""
     libraries: List[LibraryResponse]
     total: int
 
 
 # Extraction schemas
 class ExtractionRequest(BaseModel):
-    """Request to extract text from PDF."""
     pdf_path: str = Field(..., description="Path to PDF file")
-    libraries: List[str] = Field(..., description="List of library names to use")
+    libraries: List[str] = Field(..., description="List of library ids to use")
 
 
 class ExtractionResultResponse(BaseModel):
-    """Extraction result response with comprehensive metrics."""
-    id: str
-    library_name: str
-    success: bool
-    text_content: str
-    execution_time_ms: float
-    memory_usage_mb: float
-    cpu_usage_percent: float
-    pages_extracted: int
-    char_count: int
-    word_count: int
-    error_message: Optional[str]
-    # Comprehensive output metrics
-    output_size_bytes: int = Field(default=0, description="Total size of all output files in bytes")
-    images_count: int = Field(default=0, description="Number of images extracted")
-    tables_count: int = Field(default=0, description="Number of tables extracted")
-    markdown_length: int = Field(default=0, description="Length of markdown output in characters")
-    json_size_bytes: int = Field(default=0, description="Size of JSON output in bytes")
-    output_directory: Optional[str] = Field(default=None, description="Path to output directory")
-    extracted_at: datetime
+    """Normalized extraction result response."""
+    runId: str
+    benchmarkGroupId: str
+    library: str
+    libraryVersion: str = "unknown"
+    originalFilename: str = ""
+    status: str
+    createdAt: datetime
+    markdown: str = ""
+    structuredJson: Optional[dict] = None
+    metadata: Optional[dict] = None
+    warnings: List[str] = Field(default_factory=list)
+    error: Optional[str] = None
+    pageCount: int = 0
+    tableCount: int = 0
+    imageCount: int = 0
+    outputFiles: Optional[dict] = None
+    fileHash: str = ""
+    # Benchmark metrics
+    processingTimeSeconds: float = 0.0
+    peakMemoryMb: float = 0.0
+    averageCpuPercent: float = 0.0
+    inputSizeBytes: int = 0
+    outputSizeBytes: int = 0
+    markdownLength: int = 0
+    jsonSizeBytes: int = 0
 
 
 class BenchmarkResponse(BaseModel):
@@ -71,6 +83,8 @@ class BenchmarkResponse(BaseModel):
     id: str
     pdf_filename: str
     pdf_id: str
+    file_hash: str = ""
+    status: str = "completed"
     extraction_results: List[ExtractionResultResponse]
     total_duration_ms: float
     fastest_library: Optional[str]
@@ -81,25 +95,24 @@ class BenchmarkResponse(BaseModel):
 
 # History schemas
 class HistoryResponse(BaseModel):
-    """History record response."""
-    id: str
-    pdf_filename: str
-    pdf_id: str
-    libraries_used: List[str]
-    total_duration_ms: float
-    success_count: int
-    failure_count: int
-    benchmark_result_id: str
-    created_at: datetime
+    runId: str
+    benchmarkGroupId: str
+    filename: str
+    createdAt: datetime
+    selectedLibrary: str = Field(description="Primary library used")
+    status: str = Field(description="success, partial, or failed")
+    processingTime: float = Field(description="Processing time in milliseconds")
+    peakMemory: float = Field(description="Peak memory usage in MB")
+    averageCpu: float = Field(description="Average CPU usage percentage")
+    pageCount: int = Field(description="Number of pages extracted")
+    outputSize: int = Field(description="Total output size in bytes")
 
 
 class HistoryListResponse(BaseModel):
-    """List of history records response."""
     history: List[HistoryResponse]
     total: int
 
 
 class DeleteResponse(BaseModel):
-    """Delete operation response."""
     success: bool
     message: str

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, List
+from uuid import UUID
 
 from loguru import logger
 
@@ -15,7 +16,7 @@ from app.core.config import settings
 class ResultStorageService:
     """
     Service for storing benchmark results to disk.
-    
+
     Stores results in timestamped directories with JSON files.
     """
 
@@ -30,59 +31,77 @@ class ResultStorageService:
     ) -> Path:
         """
         Store benchmark result to disk.
-        
+
         Creates directory: results/{timestamp}/
         Files:
         - benchmark.json: Full benchmark results
         - metadata.json: Metadata and summary
-        
+
         Args:
             benchmark_result: BenchmarkResult to store
-            
+
         Returns:
             Path to result directory
         """
-        # Create timestamped directory
         timestamp = benchmark_result.created_at.strftime("%Y%m%d_%H%M%S_%f")[:-3]
         result_dir = self.results_dir / timestamp
         result_dir.mkdir(parents=True, exist_ok=True)
+
+        # Get benchmark_group_id from first result
+        benchmark_group_id = None
+        if benchmark_result.extraction_results:
+            benchmark_group_id = benchmark_result.extraction_results[0].benchmark_group_id
+
+        logger.info(f"Storing benchmark result to {result_dir}, group_id: {benchmark_group_id}, storage_id: {id(self)}")
         
-        logger.info(f"Storing benchmark result to {result_dir}")
-        
-        # Store benchmark.json
+        # Log all available group IDs
+        all_results = self.list_stored_results()
+        available_ids = []
+        for r in all_results:
+            bf = r / "benchmark.json"
+            if bf.exists():
+                try:
+                    import json
+                    with open(bf) as f:
+                        data = json.load(f)
+                        available_ids.append(data.get("benchmarkGroupId"))
+                except:
+                    pass
+        logger.info(f"Available group IDs before save: {available_ids}")
+
         benchmark_file = result_dir / "benchmark.json"
         benchmark_data = self._prepare_benchmark_data(benchmark_result)
         self._write_json(benchmark_file, benchmark_data)
-        
-        # Store metadata.json
+
         metadata_file = result_dir / "metadata.json"
         metadata = self._prepare_metadata(benchmark_result)
         self._write_json(metadata_file, metadata)
-        
-        # Store individual extraction results
+
         for idx, extraction_result in enumerate(benchmark_result.extraction_results):
-            result_file = result_dir / f"extraction_{extraction_result.library_name}.json"
+            result_file = result_dir / f"extraction_{extraction_result.library}.json"
             extraction_data = extraction_result.to_dict()
             self._write_json(result_file, extraction_data)
-        
+
         logger.info(f"Benchmark result stored successfully: {result_dir}")
-        
         return result_dir
 
     def _prepare_benchmark_data(self, benchmark_result: BenchmarkResult) -> Dict[str, Any]:
         """
-        Prepare complete benchmark data for storage.
-        
-        Args:
-            benchmark_result: BenchmarkResult to convert
-            
-        Returns:
-            Dictionary with benchmark data
+        Prepare complete benchmark data for storage (normalized schema).
         """
+        # Get file hash from first result
+        file_hash = ""
+        benchmark_group_id = None
+        if benchmark_result.extraction_results:
+            file_hash = benchmark_result.extraction_results[0].file_hash
+            benchmark_group_id = benchmark_result.extraction_results[0].benchmark_group_id
+
         return {
             "benchmark_id": str(benchmark_result.id),
+            "benchmarkGroupId": str(benchmark_group_id) if benchmark_group_id else str(benchmark_result.id),
             "pdf_filename": benchmark_result.pdf_filename,
             "pdf_id": str(benchmark_result.pdf_id),
+            "file_hash": file_hash,
             "created_at": benchmark_result.created_at.isoformat(),
             "total_duration_ms": benchmark_result.total_duration_ms,
             "summary": {
@@ -91,51 +110,32 @@ class ResultStorageService:
                 "most_text_extracted": benchmark_result.most_text_extracted,
             },
             "extraction_results": [
-                {
-                    "library_name": result.library_name,
-                    "success": result.success,
-                    "execution_time_ms": result.execution_time_ms,
-                    "memory_usage_mb": result.memory_usage_mb,
-                    "cpu_usage_percent": result.cpu_usage_percent,
-                    "pages_extracted": result.pages_extracted,
-                    "char_count": result.char_count,
-                    "word_count": result.word_count,
-                    "error_message": result.error_message,
-                    # Comprehensive output metrics
-                    "output_size_bytes": result.output_size_bytes,
-                    "images_count": result.images_count,
-                    "tables_count": result.tables_count,
-                    "markdown_length": result.markdown_length,
-                    "json_size_bytes": result.json_size_bytes,
-                    "output_directory": result.output_directory,
-                    "extracted_at": result.extracted_at.isoformat(),
-                }
-                for result in benchmark_result.extraction_results
+                result.to_dict() for result in benchmark_result.extraction_results
             ],
             "metadata": benchmark_result.metadata,
         }
 
     def _prepare_metadata(self, benchmark_result: BenchmarkResult) -> Dict[str, Any]:
-        """
-        Prepare metadata summary.
-        
-        Args:
-            benchmark_result: BenchmarkResult to summarize
-            
-        Returns:
-            Dictionary with metadata
-        """
-        # Calculate statistics
+        """Prepare metadata summary (normalized schema)."""
         successful_results = [
             r for r in benchmark_result.extraction_results if r.success
         ]
         failed_results = [
             r for r in benchmark_result.extraction_results if not r.success
         ]
-        
+
+        # Get file hash and benchmark_group_id from first result
+        file_hash = ""
+        benchmark_group_id = None
+        if benchmark_result.extraction_results:
+            file_hash = benchmark_result.extraction_results[0].file_hash
+            benchmark_group_id = benchmark_result.extraction_results[0].benchmark_group_id
+
         metadata = {
             "benchmark_id": str(benchmark_result.id),
+            "benchmarkGroupId": str(benchmark_group_id) if benchmark_group_id else str(benchmark_result.id),
             "pdf_filename": benchmark_result.pdf_filename,
+            "file_hash": file_hash,
             "created_at": benchmark_result.created_at.isoformat(),
             "summary": {
                 "total_libraries_tested": len(benchmark_result.extraction_results),
@@ -147,72 +147,43 @@ class ResultStorageService:
                 "most_text_extracted": benchmark_result.most_text_extracted,
             },
             "performance_comparison": {
-                "execution_times": {
-                    result.library_name: result.execution_time_ms
+                "processing_time_seconds": {
+                    result.library: result.processing_time_seconds
                     for result in benchmark_result.extraction_results
                 },
-                "memory_usage": {
-                    result.library_name: result.memory_usage_mb
+                "peak_memory_mb": {
+                    result.library: result.peak_memory_mb
                     for result in benchmark_result.extraction_results
                 },
-                "cpu_usage": {
-                    result.library_name: result.cpu_usage_percent
+                "average_cpu_percent": {
+                    result.library: result.average_cpu_percent
                     for result in benchmark_result.extraction_results
                 },
-                "output_sizes": {
-                    result.library_name: result.output_size_bytes
+                "output_size_bytes": {
+                    result.library: result.output_size_bytes
                     for result in benchmark_result.extraction_results
                 },
-                "images_extracted": {
-                    result.library_name: result.images_count
+                "image_count": {
+                    result.library: result.image_count
                     for result in benchmark_result.extraction_results
                 },
-                "tables_extracted": {
-                    result.library_name: result.tables_count
+                "table_count": {
+                    result.library: result.table_count
                     for result in benchmark_result.extraction_results
                 },
             },
             "libraries_tested": [
                 {
-                    "name": result.library_name,
+                    "name": result.library,
                     "success": result.success,
-                    "error": result.error_message,
+                    "error": result.error,
                 }
                 for result in benchmark_result.extraction_results
             ],
         }
-        
-        # Add best performers for new metrics
-        if successful_results:
-            # Most images extracted
-            most_images = max(successful_results, key=lambda r: r.images_count, default=None)
-            if most_images and most_images.images_count > 0:
-                metadata["summary"]["most_images_extracted"] = most_images.library_name
-            
-            # Most tables extracted
-            most_tables = max(successful_results, key=lambda r: r.tables_count, default=None)
-            if most_tables and most_tables.tables_count > 0:
-                metadata["summary"]["most_tables_extracted"] = most_tables.library_name
-            
-            # Smallest output size (most efficient storage)
-            smallest_output = min(
-                [r for r in successful_results if r.output_size_bytes > 0],
-                key=lambda r: r.output_size_bytes,
-                default=None
-            )
-            if smallest_output:
-                metadata["summary"]["most_efficient_storage"] = smallest_output.library_name
-        
         return metadata
 
     def _write_json(self, file_path: Path, data: Dict[str, Any]) -> None:
-        """
-        Write JSON data to file.
-        
-        Args:
-            file_path: Path to write to
-            data: Data to write
-        """
         try:
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
@@ -222,39 +193,49 @@ class ResultStorageService:
             raise
 
     def load_benchmark_result(self, result_dir: Path) -> Dict[str, Any]:
-        """
-        Load benchmark result from directory.
-        
-        Args:
-            result_dir: Path to result directory
-            
-        Returns:
-            Dictionary with benchmark data
-        """
         benchmark_file = result_dir / "benchmark.json"
         if not benchmark_file.exists():
             raise FileNotFoundError(f"Benchmark file not found: {benchmark_file}")
-        
         with open(benchmark_file, "r", encoding="utf-8") as f:
             return json.load(f)
 
+    def load_by_benchmark_id(self, benchmark_id: UUID) -> dict:
+        result_dirs = self.list_stored_results()
+        for result_dir in result_dirs:
+            benchmark_file = result_dir / "benchmark.json"
+            if not benchmark_file.exists():
+                continue
+            try:
+                with open(benchmark_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if data.get("benchmark_id") == str(benchmark_id):
+                    return data
+            except Exception:
+                continue
+        raise FileNotFoundError(f"Benchmark result not found for ID: {benchmark_id}")
+
+    def load_by_benchmark_group_id(self, benchmark_group_id: UUID) -> dict:
+        """Load benchmark result by benchmark group ID."""
+        result_dirs = self.list_stored_results()
+        for result_dir in result_dirs:
+            benchmark_file = result_dir / "benchmark.json"
+            if not benchmark_file.exists():
+                continue
+            try:
+                with open(benchmark_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if data.get("benchmarkGroupId") == str(benchmark_group_id):
+                    return data
+            except Exception:
+                continue
+        raise FileNotFoundError(f"Benchmark result not found for group ID: {benchmark_group_id}")
+
     def list_stored_results(self) -> List[Path]:
-        """
-        List all stored result directories.
-        
-        Returns:
-            List of result directory paths
-        """
         if not self.results_dir.exists():
             return []
-        
-        # Find directories with timestamp pattern
         result_dirs = [
             d for d in self.results_dir.iterdir()
             if d.is_dir() and not d.name.startswith('.')
         ]
-        
-        # Sort by creation time (newest first)
         result_dirs.sort(key=lambda d: d.stat().st_mtime, reverse=True)
-        
         return result_dirs

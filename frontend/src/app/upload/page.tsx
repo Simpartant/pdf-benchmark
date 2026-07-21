@@ -1,10 +1,18 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Upload, File, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
-import { useUploadBenchmark } from "@/hooks/useBenchmark";
-import type { BenchmarkResponse } from "@/lib/api/types";
+import {
+  Upload,
+  File,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  FileText,
+} from "lucide-react";
+import { useUploadBenchmark, useBenchmarkHistory } from "@/hooks/useBenchmark";
+import { getSystemInfo } from "@/lib/api/benchmark";
+import type { LibraryInfo } from "@/lib/api/types";
 
 export default function UploadPage() {
   const router = useRouter();
@@ -15,49 +23,30 @@ export default function UploadPage() {
     pages: number | null;
   } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [selectedLibrary, setSelectedLibrary] = useState<string>("docling");
-  const [benchmarkResult, setBenchmarkResult] = useState<BenchmarkResponse | null>(null);
-  
+  const [selectedLibraries, setSelectedLibraries] = useState<string[]>([
+    "docling",
+  ]);
+  const [availableLibraries, setAvailableLibraries] = useState<LibraryInfo[]>(
+    [],
+  );
+  const [librariesLoading, setLibrariesLoading] = useState(true);
+
   // Use React Query mutation for upload
   const uploadMutation = useUploadBenchmark();
 
-  const libraries = [
-    {
-      id: "pypdf",
-      name: "PyPDF",
-      description: "Pure Python PDF library",
-    },
-    {
-      id: "pdfplumber",
-      name: "PDFPlumber",
-      description: "Text and table extraction",
-    },
-    {
-      id: "pymupdf",
-      name: "PyMuPDF",
-      description: "Fast C-based library",
-    },
-    {
-      id: "docling",
-      name: "Docling",
-      description: "Document understanding",
-    },
-    {
-      id: "mineru",
-      name: "MinerU",
-      description: "Layout analysis + OCR",
-    },
-    {
-      id: "unstructured",
-      name: "Unstructured",
-      description: "Element-based extraction",
-    },
-    {
-      id: "opendataloader",
-      name: "OpenDataLoader",
-      description: "Unified data loading",
-    },
-  ];
+  // Load available libraries on mount
+  useEffect(() => {
+    getSystemInfo()
+      .then((data) => {
+        setAvailableLibraries(data.libraries);
+      })
+      .catch((error) => {
+        console.error("Failed to load libraries:", error);
+      })
+      .finally(() => {
+        setLibrariesLoading(false);
+      });
+  }, []);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return bytes + " B";
@@ -88,7 +77,7 @@ export default function UploadPage() {
         handleFileSelect(files[0]);
       }
     },
-    [handleFileSelect]
+    [handleFileSelect],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -108,30 +97,41 @@ export default function UploadPage() {
         handleFileSelect(files[0]);
       }
     },
-    [handleFileSelect]
+    [handleFileSelect],
   );
 
+  const handleLibraryToggle = (libraryName: string) => {
+    setSelectedLibraries((prev) => {
+      if (prev.includes(libraryName)) {
+        return prev.filter((l) => l !== libraryName);
+      } else {
+        return [...prev, libraryName];
+      }
+    });
+  };
+
   const handleRunBenchmark = async () => {
-    if (!selectedFile) {
+    if (!selectedFile || selectedLibraries.length === 0) {
       return;
     }
 
     uploadMutation.mutate(
       {
         file: selectedFile,
-        library: selectedLibrary,
+        libraries: selectedLibraries.join(","),
       },
       {
         onSuccess: (data) => {
-          setBenchmarkResult(data);
-          // Store in session storage for results page
-          sessionStorage.setItem(`benchmark_${data.benchmark_id}`, JSON.stringify(data));
-          // Redirect after success
-          setTimeout(() => {
-            router.push(`/results?id=${data.benchmark_id}`);
-          }, 1500);
+          // Navigate based on number of selected libraries
+          if (selectedLibraries.length > 1) {
+            // Multiple libraries: go to comparison page
+            router.push(`/compare/${data.id}`);
+          } else {
+            // Single library: go to results page
+            router.push(`/results/${data.id}`);
+          }
         },
-      }
+      },
     );
   };
 
@@ -143,7 +143,7 @@ export default function UploadPage() {
             PDF Extraction Benchmark
           </h1>
           <p className="text-muted-foreground">
-            Upload a PDF and select an extraction library to test
+            Upload a PDF and extract text using multiple libraries
           </p>
         </div>
 
@@ -211,27 +211,11 @@ export default function UploadPage() {
                   </p>
                 </div>
               )}
-              
-              {uploadMutation.isSuccess && benchmarkResult && (
-                <div className="mt-4 p-4 bg-green-500/10 border border-green-500/20 rounded-lg flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="text-sm text-green-500 font-medium mb-1">
-                      Benchmark completed successfully!
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Redirecting to results...
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
 
             {fileInfo && (
               <div className="bg-card rounded-lg border shadow-sm p-6">
-                <h2 className="text-xl font-semibold mb-4">
-                  File Information
-                </h2>
+                <h2 className="text-xl font-semibold mb-4">File Information</h2>
                 <div className="space-y-3">
                   <div className="flex items-start gap-3 p-4 bg-muted/50 rounded-lg">
                     <File className="w-5 h-5 text-primary mt-0.5" />
@@ -253,52 +237,66 @@ export default function UploadPage() {
 
           <div className="lg:col-span-1">
             <div className="bg-card rounded-lg border shadow-sm p-6 sticky top-4">
-              <h2 className="text-xl font-semibold mb-4">
-                Select Library
-              </h2>
+              <h2 className="text-xl font-semibold mb-4">Select Libraries</h2>
               <p className="text-sm text-muted-foreground mb-4">
-                Choose which extraction library to benchmark
+                Choose one or more extraction libraries to compare
               </p>
 
-              <div className="space-y-2 mb-6">
-                {libraries.map((library) => (
-                  <label
-                    key={library.id}
-                    className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-all border-2 ${
-                      selectedLibrary === library.id
-                        ? "border-primary bg-primary/5"
-                        : "border-transparent hover:bg-muted/50"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="library"
-                      value={library.id}
-                      checked={selectedLibrary === library.id}
-                      onChange={(e) => setSelectedLibrary(e.target.value)}
-                      className="mt-1 w-4 h-4 text-primary focus:ring-primary focus:ring-offset-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm">{library.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {library.description}
-                      </p>
-                    </div>
-                  </label>
-                ))}
-              </div>
+              {librariesLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                </div>
+              ) : (
+                <div className="space-y-2 mb-4">
+                  {availableLibraries.map((lib) => (
+                    <label
+                      key={lib.name}
+                      className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedLibraries.includes(lib.name)}
+                        onChange={() => handleLibraryToggle(lib.name)}
+                        disabled={!lib.installed}
+                        className="w-4 h-4"
+                      />
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">
+                          {lib.displayName || lib.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {lib.installed
+                            ? `${lib.name || "unknown"}`
+                            : `${lib.status} - ${lib.diagnostics?.[0] || "not available"}`}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
 
               <div className="pt-4 border-t">
                 <p className="text-sm text-muted-foreground mb-4">
-                  Selected: <span className="font-medium">{libraries.find(l => l.id === selectedLibrary)?.name}</span>
+                  Selected:{" "}
+                  <span className="font-medium">
+                    {selectedLibraries.length > 0
+                      ? selectedLibraries.join(", ")
+                      : "None"}
+                  </span>
                 </p>
                 <button
                   onClick={handleRunBenchmark}
-                  disabled={!selectedFile || uploadMutation.isPending}
+                  disabled={
+                    !selectedFile ||
+                    uploadMutation.isPending ||
+                    selectedLibraries.length === 0
+                  }
                   className={`
                     w-full py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center gap-2
                     ${
-                      !selectedFile || uploadMutation.isPending
+                      !selectedFile ||
+                      uploadMutation.isPending ||
+                      selectedLibraries.length === 0
                         ? "bg-muted text-muted-foreground cursor-not-allowed"
                         : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm hover:shadow"
                     }
@@ -309,13 +307,8 @@ export default function UploadPage() {
                       <Loader2 className="w-5 h-5 animate-spin" />
                       Processing...
                     </>
-                  ) : uploadMutation.isSuccess ? (
-                    <>
-                      <CheckCircle2 className="w-5 h-5" />
-                      Completed!
-                    </>
                   ) : (
-                    "Run Benchmark"
+                    "Run Extraction"
                   )}
                 </button>
               </div>
@@ -337,7 +330,9 @@ export default function UploadPage() {
             </p>
           </div>
           <div className="bg-card rounded-lg border p-4">
-            <h3 className="font-semibold text-sm mb-1">Comprehensive Results</h3>
+            <h3 className="font-semibold text-sm mb-1">
+              Comprehensive Results
+            </h3>
             <p className="text-xs text-muted-foreground">
               View detailed extraction metrics and outputs
             </p>

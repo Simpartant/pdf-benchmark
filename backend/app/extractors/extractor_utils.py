@@ -107,9 +107,9 @@ def count_images_in_directory(images_dir: Path) -> int:
 def create_extraction_summary(
     library_name: str,
     markdown_text: str,
-    images_count: int,
-    tables_count: int,
     pages_count: int = 0,
+    images_count: int = 0,
+    tables_count: int = 0,
     additional_stats: Dict[str, Any] = None,
     output_files: Dict[str, str] = None,
 ) -> Dict[str, Any]:
@@ -119,9 +119,9 @@ def create_extraction_summary(
     Args:
         library_name: Name of extraction library
         markdown_text: Extracted markdown text
+        pages_count: Number of pages processed
         images_count: Number of images extracted
         tables_count: Number of tables extracted
-        pages_count: Number of pages processed
         additional_stats: Additional statistics to include
         output_files: Dictionary of output file descriptions
         

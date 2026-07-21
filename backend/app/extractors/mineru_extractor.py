@@ -1,20 +1,28 @@
-"""MinerU extractor implementation."""
+"""MinerU extractor implementation (normalized interface).
+
+Supports two distribution packages:
+  - `magic-pdf` (legacy, Python 3.9+ but prebuilt binaries may fail)
+  - `mineru` (current, Python 3.10+)
+
+Detection resolves the actual CLI from installed console_scripts metadata
+rather than guessing names.
+"""
 
 import json
+import shutil
+import sys
+import subprocess
 from pathlib import Path
-from typing import Any
-from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
+from importlib.metadata import entry_points as metadata_entry_points
 
 from loguru import logger
 
 from app.extractors.base_extractor import BaseExtractor
 from app.models.extraction_result import ExtractionResult
 from app.extractors.extractor_utils import (
-    create_timestamped_output_directory,
     save_text_file,
     save_json_file,
-    get_library_version,
-    count_images_in_directory,
     create_extraction_summary,
 )
 
@@ -22,333 +30,411 @@ from app.extractors.extractor_utils import (
 class MinerUExtractor(BaseExtractor):
     """
     MinerU PDF extraction implementation.
-    
-    Extracts PDF content to multiple formats:
-    - Markdown text
-    - JSON structure
-    - Images
-    - Tables
-    - Metadata
-    
-    Saves all outputs to results/{timestamp}/mineru/
+
+    Extracts PDF content to markdown, JSON, and images using the official
+    MinerU CLI. Requires the `mineru` package (Python 3.10+) or
+    `magic-pdf` package (Python 3.9+).
     """
 
-    def __init__(self):
-        super().__init__("mineru")
-        self._mineru_available = self._check_mineru_installation()
+    library_id = "mineru"
+    display_name = "MinerU"
+    description = "High-accuracy PDF parsing with layout analysis and OCR support"
+    capabilities = [
+        "text_extraction",
+        "markdown_export",
+        "json_export",
+        "image_extraction",
+        "table_extraction",
+        "layout_analysis",
+        "ocr_support",
+        "metadata_extraction",
+    ]
+    performance_notes = "Requires Python 3.10+ for full support; package detected but CLI may be unavailable on Python 3.9"
+    required_modules = ["magic_pdf", "mineru"]
 
-    def _check_mineru_installation(self) -> bool:
-        """Check if MinerU is installed."""
-        try:
-            import magic_pdf
-            logger.info(f"MinerU available: version {magic_pdf.__version__}")
-            return True
-        except ImportError:
-            logger.warning("MinerU not installed")
+    # Default timeout in seconds
+    DEFAULT_TIMEOUT = 300
+
+    def __init__(self):
+        super().__init__()
+        self._python_version_info = sys.version_info
+        self._python_version_str = f"{self._python_version_info.major}.{self._python_version_info.minor}.{self._python_version_info.micro}"
+        self._module_available = self._check_module_available()
+        self._cli_info = self._resolve_cli()
+        self._runtime_usable = self._check_runtime_usable()
+
+    def _check_module_available(self) -> bool:
+        """Check if any of the MinerU modules are available."""
+        for module in self.required_modules:
+            try:
+                __import__(module)
+                return True
+            except ImportError:
+                continue
+        return False
+
+    def _check_runtime_usable(self) -> bool:
+        """
+        Check if MinerU is actually usable from this Python environment.
+        The magic-pdf CLI uses Python 3.10+ syntax (list[X | Y], etc.)
+        and will crash on Python < 3.10.
+        """
+        if not self._module_available:
             return False
 
-    def extract(self, pdf_path: Path) -> ExtractionResult:
-        """
-        Extract PDF with MinerU (legacy method).
-        
-        Args:
-            pdf_path: Path to PDF file
-            
-        Returns:
-            ExtractionResult with extracted data
-        """
-        # Validate PDF
-        self.validate_pdf(pdf_path)
-        
-        if not self._mineru_available:
-            return ExtractionResult(
-                library_name=self.library_name,
-                success=False,
-                error_message="MinerU is not installed. Install with: pip install magic-pdf[full]",
-            )
-
-        try:
-            # Extract text for result
-            text = self.extract_text(pdf_path)
-            
-            # Create result
-            return ExtractionResult(
-                library_name=self.library_name,
-                success=True,
-                text_content=text,
-                metadata={"note": "Use extract_text() for full feature support"},
-            )
-            
-        except Exception as e:
-            logger.error(f"MinerU extraction failed: {e}")
-            return ExtractionResult(
-                library_name=self.library_name,
-                success=False,
-                error_message=str(e),
-            )
-
-    def extract_text(self, pdf_path: Path) -> str:
-        """
-        Extract text using MinerU with full feature support.
-        
-        Extracts and saves:
-        - Markdown text
-        - JSON structure
-        - Images
-        - Tables
-        - Metadata
-        
-        Args:
-            pdf_path: Path to PDF file
-            
-        Returns:
-            Extracted text content (markdown format)
-            
-        Raises:
-            ImportError: If MinerU not installed
-            Exception: For extraction errors
-        """
-        # Validate PDF
-        self.validate_pdf(pdf_path)
-        
-        if not self._mineru_available:
-            raise ImportError("MinerU is not installed. Install with: pip install magic-pdf[full]")
-
-        try:
-            # Import MinerU components
-            from magic_pdf.pipe.UNIPipe import UNIPipe
-            from magic_pdf.pipe.OCRPipe import OCRPipe
-            from magic_pdf.rw.DiskReaderWriter import DiskReaderWriter
-            import magic_pdf.model as model_config
-            
-            logger.info(f"Starting MinerU extraction for {pdf_path}")
-            start_time = datetime.now()
-            
-            # Create output directory
-            output_dir = create_timestamped_output_directory(self.library_name, pdf_path)
-            logger.info(f"MinerU output directory: {output_dir}")
-            
-            # Read PDF bytes
-            pdf_bytes = pdf_path.read_bytes()
-            
-            # Create reader/writer
-            image_writer = DiskReaderWriter(str(output_dir))
-            
-            # Try with layout analysis first
+        # magic-pdf 1.3.0 uses Python 3.10+ union syntax in CLI code
+        if self._python_version_info < (3, 10):
+            # Check if we can at least import the module without crashing
             try:
-                # Initialize pipe with auto mode (tries to detect best method)
-                pipe = UNIPipe(pdf_bytes, {"_pdf_type": ""}, image_writer)
-                
-                # Classify document type
-                pipe.pipe_classify()
-                
-                # Parse document
-                pipe.pipe_parse()
-                
-                # Get content in different formats
-                markdown_text = pipe.pipe_mk_markdown(
-                    str(output_dir),
-                    drop_mode="none"
+                import magic_pdf
+                return False  # Module exists but CLI/tools won't work
+            except Exception:
+                return False
+
+        return True
+
+    def _find_console_scripts(self) -> List[Tuple[str, str]]:
+        """
+        Find all console_scripts registered by mineru / magic-pdf packages.
+        Returns list of (name, value) pairs.
+        """
+        scripts = []
+        try:
+            # Python 3.9 compatibility
+            eps = metadata_entry_points()
+            for ep in eps:
+                if hasattr(ep, 'group') and ep.group == 'console_scripts':
+                    if 'mineru' in ep.name.lower() or 'magic' in ep.name.lower():
+                        scripts.append((ep.name, ep.value))
+        except Exception:
+            pass
+        return scripts
+
+    def _resolve_cli(self) -> Dict[str, Any]:
+        """
+        Resolve the mineru CLI path using multiple strategies.
+
+        Returns:
+            Dict with keys: path (str|None), name (str), scripts (list), diagnostics (list)
+        """
+        info: Dict[str, Any] = {
+            "path": None,
+            "name": None,
+            "scripts": [],
+            "diagnostics": [],
+        }
+
+        # 1) Check console_scripts from installed package metadata
+        scripts = self._find_console_scripts()
+        info["scripts"] = scripts
+        for name, _ in scripts:
+            cli_path = shutil.which(name)
+            if cli_path:
+                info["path"] = cli_path
+                info["name"] = name
+                return info
+
+        # 2) Check PATH for expected names
+        for name in ["mineru", "magic-pdf", "magic-pdf-dev"]:
+            cli_path = shutil.which(name)
+            if cli_path:
+                info["path"] = cli_path
+                info["name"] = name
+                return info
+
+        # 3) Check in the venv bin directory
+        bin_dir = Path(sys.executable).parent
+        for name in ["mineru", "magic-pdf", "magic-pdf-dev"]:
+            candidate = bin_dir / name
+            if candidate.exists():
+                info["path"] = str(candidate)
+                info["name"] = name
+                return info
+
+        # No CLI found – collect diagnostics
+        info["diagnostics"].append(f"Python {self._python_version_str} (active: {sys.executable})")
+        info["diagnostics"].append(f"Prefix: {sys.prefix}")
+        if self._module_available:
+            info["diagnostics"].append("Package detected but no usable console script in PATH or venv bin")
+            if self._python_version_info < (3, 10):
+                info["diagnostics"].append(
+                    "magic-pdf 1.3.0 tools require Python 3.10+ "
+                    "(uses `list[bytes | Dataset]` union syntax not supported on this Python)"
                 )
-                
-                # Get structured content
-                content_list = pipe.pipe_mk_uni_format(str(output_dir), drop_mode="none")
-                
-            except Exception as e:
-                logger.warning(f"UNIPipe failed, trying OCR mode: {e}")
-                # Fallback to OCR if layout analysis fails
-                pipe = OCRPipe(pdf_bytes, image_writer)
-                pipe.pipe_classify()
-                pipe.pipe_parse()
-                markdown_text = pipe.pipe_mk_markdown(
-                    str(output_dir),
-                    drop_mode="none"
+        else:
+            info["diagnostics"].append("MinerU package not installed")
+
+        return info
+
+    def is_available(self) -> bool:
+        """MinerU is available only when module exists AND CLI is resolvable AND runtime is usable."""
+        return self._module_available and self._cli_info["path"] is not None and self._runtime_usable
+
+    def get_version(self) -> str:
+        """Get the version from the available module or package metadata."""
+        import importlib.metadata as metadata
+
+        for module in self.required_modules:
+            try:
+                mod = __import__(module)
+                version = getattr(mod, "__version__", None)
+                if version:
+                    return str(version)
+            except ImportError:
+                continue
+
+        for package in ["magic-pdf", "mineru"]:
+            try:
+                return metadata.version(package)
+            except Exception:
+                continue
+        return "unknown"
+
+    def get_info(self) -> "ExtractorInfo":
+        """Detailed status including Python version, module, and CLI diagnostics."""
+        from app.extractors.base_extractor import ExtractorInfo, AvailabilityStatus, DependencyDiagnostic
+
+        deps: List[DependencyDiagnostic] = []
+        diags: List[str] = []
+
+        # Dependency: module
+        for module in self.required_modules:
+            try:
+                mod = __import__(module)
+                version = getattr(mod, "__version__", "unknown")
+                deps.append(DependencyDiagnostic(
+                    name=module, module=module, installed=True, version=version,
+                ))
+            except ImportError:
+                deps.append(DependencyDiagnostic(
+                    name=module, module=module, installed=False, error="Module not found",
+                ))
+
+        # Diagnostics from CLI resolution
+        if self._cli_info["diagnostics"]:
+            diags.extend(self._cli_info["diagnostics"])
+
+        # Determine status
+        if self._module_available and self._cli_info["path"] and self._runtime_usable:
+            status = AvailabilityStatus.AVAILABLE
+        elif self._module_available and not self._runtime_usable:
+            status = AvailabilityStatus.ERROR
+            diags.insert(0, f"Python {self._python_version_str} does not meet the >=3.10 requirement")
+        elif self._module_available and not self._cli_info["path"]:
+            status = AvailabilityStatus.ERROR
+            if not any("console script" in d for d in diags):
+                diags.insert(0, "No usable CLI found")
+        else:
+            status = AvailabilityStatus.NOT_INSTALLED
+
+        return ExtractorInfo(
+            library_id=self.library_id,
+            display_name=self.display_name,
+            version=self.get_version(),
+            status=status,
+            description=self.description,
+            capabilities=self.capabilities,
+            performance_notes=self.performance_notes,
+            dependencies=deps,
+            diagnostics=diags,
+        )
+
+    def extract(
+        self,
+        pdf_path: Path,
+        output_dir: Path,
+        options: Optional[Dict[str, Any]] = None,
+    ) -> ExtractionResult:
+        """Extract PDF with MinerU into a normalized ExtractionResult."""
+        self.validate_pdf(pdf_path)
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        if not self._module_available:
+            return ExtractionResult(
+                library=self.library_id,
+                library_version=self.get_version(),
+                original_filename=pdf_path.name,
+                status="failed",
+                error="MinerU package not installed. Install with: pip install magic-pdf",
+                output_files={},
+            )
+
+        if not self._runtime_usable:
+            return ExtractionResult(
+                library=self.library_id,
+                library_version=self.get_version(),
+                original_filename=pdf_path.name,
+                status="failed",
+                error=(
+                    f"MinerU requires Python 3.10+ for its toolchain. "
+                    f"Active Python is {self._python_version_str} ({sys.executable}). "
+                    f"Install with a Python 3.10+ environment."
+                ),
+                output_files={},
+            )
+
+        cli_path = self._cli_info.get("path")
+        if not cli_path:
+            return ExtractionResult(
+                library=self.library_id,
+                library_version=self.get_version(),
+                original_filename=pdf_path.name,
+                status="failed",
+                error="MinerU CLI not found. The installed package has no usable console script.",
+                output_files={},
+            )
+
+        # Get options
+        backend = (options or {}).get("backend", "pipeline")
+        timeout = (options or {}).get("timeout", self.DEFAULT_TIMEOUT)
+
+        try:
+            method = "auto" if backend == "pipeline" else backend
+            model_mode = (options or {}).get("model_mode", "lite")
+            logger.info(f"Running MinerU CLI: {cli_path} pdf --pdf {pdf_path} --method {method} --inside_model true --model_mode {model_mode}")
+
+            cmd = [
+                cli_path,
+                "pdf",
+                "--pdf", str(pdf_path),
+                "--method", method,
+                "--inside_model", "true",
+                "--model_mode", model_mode,
+            ]
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=str(output_dir),
+            )
+
+            if result.returncode != 0:
+                error_msg = result.stderr or result.stdout or f"Exit code: {result.returncode}"
+                return ExtractionResult(
+                    library=self.library_id,
+                    library_version=self.get_version(),
+                    original_filename=pdf_path.name,
+                    status="failed",
+                    error=f"MinerU CLI failed: {error_msg.strip()}",
+                    output_files={},
                 )
-                content_list = pipe.pipe_mk_uni_format(str(output_dir), drop_mode="none")
-            
-            # Save outputs
-            self._save_outputs(
-                output_dir=output_dir,
-                pipe=pipe,
-                markdown_text=markdown_text,
-                content_list=content_list,
+
+            # Load the generated outputs
+            output_files = self._load_outputs(output_dir)
+            markdown_text = self._read_markdown(output_dir)
+            json_data = self._read_json(output_dir)
+            page_count, table_count, image_count = self._extract_metrics(json_data)
+
+            return ExtractionResult(
+                library=self.library_id,
+                library_version=self.get_version(),
+                original_filename=pdf_path.name,
+                status="success",
+                markdown=markdown_text,
+                structured_json={"mineru": json_data} if json_data else None,
+                metadata={"extractor": self.library_id, "backend": backend, "cli": cli_path},
+                page_count=page_count,
+                table_count=table_count,
+                image_count=image_count,
+                output_files=output_files,
             )
-            
-            extraction_time = (datetime.now() - start_time).total_seconds()
-            logger.info(
-                f"MinerU extraction completed in {extraction_time:.2f}s: "
-                f"{len(markdown_text)} characters, outputs saved to {output_dir}"
+
+        except subprocess.TimeoutExpired:
+            return ExtractionResult(
+                library=self.library_id,
+                library_version=self.get_version(),
+                original_filename=pdf_path.name,
+                status="failed",
+                error=f"MinerU extraction timed out after {timeout} seconds",
+                output_files={},
             )
-            
-            return markdown_text
-            
-        except ImportError as e:
-            logger.error(f"MinerU import error: {e}")
-            raise ImportError(f"Failed to import MinerU: {e}")
-            
         except Exception as e:
-            logger.error(f"MinerU extraction failed: {e}", exc_info=True)
-            raise Exception(f"MinerU extraction error: {e}")
+            logger.exception(f"MinerU extraction failed: {e}")
+            return ExtractionResult(
+                library=self.library_id,
+                library_version=self.get_version(),
+                original_filename=pdf_path.name,
+                status="failed",
+                error=str(e),
+                output_files={},
+            )
+
+    def _load_outputs(self, output_dir: Path) -> Dict[str, Any]:
+        """Load paths to generated output files."""
+        output_files: Dict[str, Any] = {}
+        for ext, key in [(".md", "markdown"), (".json", "json")]:
+            for f in output_dir.glob(f"*{ext}"):
+                if "metadata" not in f.name.lower() and "summary" not in f.name.lower():
+                    output_files[key] = str(f)
+        return output_files
+
+    def _read_markdown(self, output_dir: Path) -> str:
+        """Read the generated markdown file."""
+        for f in output_dir.glob("*.md"):
+            if "metadata" not in f.name.lower() and "summary" not in f.name.lower():
+                with open(f, "r", encoding="utf-8") as mf:
+                    return mf.read()
+        return ""
+
+    def _read_json(self, output_dir: Path) -> Dict[str, Any]:
+        """Read the generated JSON file."""
+        for f in output_dir.glob("*.json"):
+            if "metadata" not in f.name.lower() and "summary" not in f.name.lower():
+                with open(f, "r", encoding="utf-8") as jf:
+                    return json.load(jf)
+        return {}
+
+    def _extract_metrics(self, json_data: Dict[str, Any]) -> Tuple[int, int, int]:
+        """Extract page count, table count, and image count from MinerU JSON."""
+        pages = set()
+        table_count = 0
+        image_count = 0
+
+        for item in json_data if isinstance(json_data, list) else json_data.get("elements", []):
+            if isinstance(item, dict):
+                if "page" in item:
+                    pages.add(item["page"])
+                item_type = item.get("type", "").lower()
+                if item_type == "table":
+                    table_count += 1
+                elif item_type == "image":
+                    image_count += 1
+
+        return len(pages), table_count, image_count
 
     def _save_outputs(
         self,
         output_dir: Path,
-        pipe: Any,
+        documents: list,
         markdown_text: str,
-        content_list: list,
-    ) -> None:
-        """
-        Save all MinerU outputs to directory.
-        
-        Saves:
-        - markdown.md: Markdown text
-        - content.json: Structured content
-        - metadata.json: Document metadata
-        - images/: Extracted images (auto-saved by MinerU)
-        - tables/: Extracted tables (from content)
-        
-        Args:
-            output_dir: Output directory path
-            pipe: MinerU pipe instance
-            markdown_text: Markdown text content
-            content_list: Structured content list
-        """
+        json_structure: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Save additional metadata and summary files."""
+        output_files: Dict[str, Any] = {}
         try:
-            # Save markdown
-            markdown_file = output_dir / "markdown.md"
-            save_text_file(markdown_file, markdown_text)
-            logger.debug(f"Saved markdown: {markdown_file}")
-            
-            # Save structured content as JSON
-            content_file = output_dir / "content.json"
-            save_json_file(content_file, content_list)
-            logger.debug(f"Saved content JSON: {content_file}")
-            
-            # Save metadata
             metadata_file = output_dir / "metadata.json"
-            self._save_metadata(metadata_file, pipe, markdown_text)
-            logger.debug(f"Saved metadata: {metadata_file}")
-            
-            # Extract and save tables from content
-            tables_dir = output_dir / "tables"
-            tables_saved = self._save_tables(tables_dir, content_list)
-            if tables_saved:
-                logger.debug(f"Saved {tables_saved} tables to: {tables_dir}")
-            
-            # Count images (MinerU saves them automatically)
-            images_dir = output_dir / "images"
-            images_saved = count_images_in_directory(images_dir)
-            if images_saved:
-                logger.debug(f"Found {images_saved} images in: {images_dir}")
-            
-            # Create summary file
+            save_json_file(
+                metadata_file,
+                {"extractor": self.library_id, "total_documents": len(documents)},
+            )
+            output_files["metadata"] = str(metadata_file)
+
             summary_file = output_dir / "summary.json"
-            self._save_summary(summary_file, pipe, markdown_text, images_saved, tables_saved)
-            logger.debug(f"Saved summary: {summary_file}")
-            
+            save_json_file(
+                summary_file,
+                create_extraction_summary(
+                    library_name=self.library_id,
+                    markdown_text=markdown_text,
+                    images_count=0,
+                    tables_count=0,
+                    pages_count=0,
+                    output_files=output_files,
+                ),
+            )
+            output_files["summary"] = str(summary_file)
         except Exception as e:
             logger.error(f"Error saving MinerU outputs: {e}")
-            # Don't raise - extraction succeeded even if save failed
-
-    def _save_metadata(self, file_path: Path, pipe: Any, markdown_text: str) -> None:
-        """Save document metadata."""
-        try:
-            metadata = {
-                "extractor": self.library_name,
-                "extraction_time": datetime.now().isoformat(),
-                "mineru_version": get_library_version("magic_pdf"),
-                "text_length": len(markdown_text),
-                "word_count": len(markdown_text.split()),
-            }
-            
-            # Add pipe metadata if available
-            if hasattr(pipe, "pdf_mid_data"):
-                metadata["pdf_info"] = {
-                    "page_count": len(pipe.pdf_mid_data.get("pdf_info", [])),
-                }
-            
-            save_json_file(file_path, metadata)
-                
-        except Exception as e:
-            logger.error(f"Failed to save metadata: {e}", exc_info=True)
-
-    def _save_tables(self, tables_dir: Path, content_list: list) -> int:
-        """
-        Extract and save tables from content list.
-        
-        Args:
-            tables_dir: Directory to save tables
-            content_list: Structured content list
-            
-        Returns:
-            Number of tables saved
-        """
-        try:
-            tables_dir.mkdir(parents=True, exist_ok=True)
-            tables_saved = 0
-            
-            # Extract tables from content list
-            for item in content_list:
-                if isinstance(item, dict) and item.get("type") == "table":
-                    try:
-                        # Save table as JSON
-                        json_file = tables_dir / f"table_{tables_saved:03d}.json"
-                        save_json_file(json_file, item)
-                        
-                        # Save table as markdown if available
-                        if "markdown" in item or "text" in item:
-                            md_file = tables_dir / f"table_{tables_saved:03d}.md"
-                            table_text = item.get("markdown", item.get("text", ""))
-                            save_text_file(md_file, table_text)
-                        
-                        tables_saved += 1
-                        
-                    except Exception as e:
-                        logger.warning(f"Failed to save table {tables_saved}: {e}")
-                        
-            return tables_saved
-            
-        except Exception as e:
-            logger.error(f"Error saving tables: {e}")
-            return 0
-
-    def _save_summary(
-        self,
-        file_path: Path,
-        pipe: Any,
-        markdown_text: str,
-        images_saved: int,
-        tables_saved: int,
-    ) -> None:
-        """Save extraction summary."""
-        try:
-            # Get page count
-            pages_count = 0
-            if hasattr(pipe, "pdf_mid_data"):
-                pages_count = len(pipe.pdf_mid_data.get("pdf_info", []))
-            
-            # Create standardized summary
-            output_files = {
-                "markdown": "markdown.md",
-                "content": "content.json",
-                "metadata": "metadata.json",
-            }
-            
-            if images_saved > 0:
-                output_files["images"] = f"images/ ({images_saved} files)"
-            if tables_saved > 0:
-                output_files["tables"] = f"tables/ ({tables_saved} files)"
-            
-            summary = create_extraction_summary(
-                library_name=self.library_name,
-                markdown_text=markdown_text,
-                images_count=images_saved,
-                tables_count=tables_saved,
-                pages_count=pages_count,
-                output_files=output_files,
-            )
-            
-            save_json_file(file_path, summary)
-                
-        except Exception as e:
-            logger.error(f"Failed to save summary: {e}", exc_info=True)
+        return output_files

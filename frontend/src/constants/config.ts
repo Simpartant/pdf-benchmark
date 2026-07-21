@@ -8,8 +8,8 @@ export const API_CONFIG = {
 
 export const UPLOAD_CONFIG = {
   MAX_FILE_SIZE: 50 * 1024 * 1024, // 50MB
-  ALLOWED_TYPES: ["application/pdf"],
-  ALLOWED_EXTENSIONS: [".pdf"],
+  ALLOWED_TYPES: ["application/pdf"] as readonly string[],
+  ALLOWED_EXTENSIONS: [".pdf"] as readonly string[],
 } as const;
 
 export const POLLING_CONFIG = {

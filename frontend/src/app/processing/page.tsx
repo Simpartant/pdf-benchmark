@@ -36,8 +36,12 @@ interface BenchmarkProgress {
 
 export default function ProcessingPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const benchmarkId = searchParams.get("id");
+  const [benchmarkId, setBenchmarkId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setBenchmarkId(params.get("id"));
+  }, []);
 
   const [progress, setProgress] = useState<BenchmarkProgress>({
     benchmarkId: benchmarkId || "unknown",
@@ -71,7 +75,7 @@ export default function ProcessingPage() {
         }
 
         // Simulate progress
-        const libraries = ["docling", "mineru", "unstructured", "opendataloader"];
+        const libraries = ["docling", "mineru", "unstructured", "pypdf"];
         const currentIndex = prev.completedLibraries.length;
         const shouldComplete = Math.random() > 0.7 && prev.elapsedTime > 3;
 
@@ -202,7 +206,8 @@ export default function ProcessingPage() {
               </span>
             </div>
             <span className="text-sm text-muted-foreground">
-              {progress.completedLibraries.length} / {progress.totalLibraries} libraries
+              {progress.completedLibraries.length} / {progress.totalLibraries}{" "}
+              libraries
             </span>
           </div>
 
@@ -286,7 +291,9 @@ export default function ProcessingPage() {
             <div className="h-2 bg-muted rounded-full overflow-hidden">
               <div
                 className="h-full bg-orange-500 transition-all duration-300"
-                style={{ width: `${(progress.currentMetrics.memory / 512) * 100}%` }}
+                style={{
+                  width: `${(progress.currentMetrics.memory / 512) * 100}%`,
+                }}
               />
             </div>
           </div>
@@ -369,10 +376,13 @@ export default function ProcessingPage() {
         <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
           <div>
-            <p className="text-sm font-medium text-blue-500">Processing in Progress</p>
+            <p className="text-sm font-medium text-blue-500">
+              Processing in Progress
+            </p>
             <p className="text-sm text-muted-foreground mt-1">
-              This page will automatically redirect to results when all extractions are complete.
-              You can safely close this page - the benchmark will continue in the background.
+              This page will automatically redirect to results when all
+              extractions are complete. You can safely close this page - the
+              benchmark will continue in the background.
             </p>
           </div>
         </div>

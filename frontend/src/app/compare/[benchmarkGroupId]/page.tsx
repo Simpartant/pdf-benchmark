@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import {
   CheckCircle2,
   XCircle,
@@ -74,12 +74,8 @@ function extractToComparison(r: ExtractionResultResponse): LibraryComparison {
 
 export default function ComparisonPage() {
   const router = useRouter();
-  const [benchmarkGroupId, setBenchmarkGroupId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setBenchmarkGroupId(params.get("id"));
-  }, []);
+  const params = useParams();
+  const benchmarkGroupId = params.benchmarkGroupId as string;
 
   // Fetch comparison data - use the benchmarkGroupId
   const {

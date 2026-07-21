@@ -65,17 +65,8 @@ export const AVAILABLE_LIBRARIES: LibraryConfig[] = [
     features: ["Classification", "Elements", "Images", "Tables"],
     selected: false,
   },
-  {
-    id: "opendataloader",
-    name: "OpenDataLoader",
-    description: "Unified data loading",
-    icon: "📦",
-    color: "indigo",
-    features: ["Documents", "Metadata", "Images", "Tables"],
-    selected: false,
-  },
 ];
 
-export const DEFAULT_SELECTED_LIBRARIES = AVAILABLE_LIBRARIES
-  .filter((lib) => lib.selected)
-  .map((lib) => lib.id);
+export const DEFAULT_SELECTED_LIBRARIES = AVAILABLE_LIBRARIES.filter(
+  (lib) => lib.selected,
+).map((lib) => lib.id);
